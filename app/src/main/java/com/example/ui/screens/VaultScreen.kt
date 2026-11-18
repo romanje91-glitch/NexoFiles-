@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.NexoVaultDriveMirror
+import com.example.NexoNavBridge
 import com.example.ui.components.*
 
 import android.content.ClipData

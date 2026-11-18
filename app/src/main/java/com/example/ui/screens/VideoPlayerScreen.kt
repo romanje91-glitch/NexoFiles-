@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import com.example.NexoNavBridge
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import android.net.Uri
 import android.view.ViewGroup
 import android.widget.FrameLayout

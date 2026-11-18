@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import com.example.NexoNavBridge
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.example.ui.components.*
 
 import android.content.Intent
@@ -348,6 +351,13 @@ fun SettingsScreen(
           shape = RoundedCornerShape(4.dp),
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            androidx.compose.material3.OutlinedButton(
+                onClick = { NexoNavBridge.showWebBrowser = true },
+                modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
+            ) {
+                androidx.compose.material3.Text("🌐 ABRIR NAVEGADOR WEB SENCILLO")
+            }
+            
             Text(strings.resetDefaultAppsBtn.uppercase(), color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
             Text(strings.configuredDefaultAppsCount(defaultAppMappingsCount), style = MonoTnumStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
           }

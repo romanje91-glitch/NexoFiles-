@@ -1,7 +1,5 @@
 package com.example.ui.i18n
 
-import com.example.NexoVaultDriveMirror
-import com.example.NexoNavBridge
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.os.LocaleListCompat
@@ -1123,7 +1121,7 @@ object EsStrings : AppStrings {
   override val crashCopiedToast = "Reporte de error copiado al portapapeles"
   override val versionLabel = "Versión"
   override val aboutNexoTitle = "Acerca de NexoFiles"
-  override val aboutNexoDesc = "NERV HUD Explorer v1.0 · Cero anuncios · Código limpio"
+  override val aboutNexoDesc = "NERV HUD Explorer v1.2.0 · Cero anuncios · Código limpio"
   override val privacyPolicyTitle = "Política de Privacidad"
   override val privacyPolicyDesc = "Sin telemetría. Todos los datos permanecen en tu dispositivo o tu Google Drive."
   override val helpFeedbackTitle = "Ayuda y Comentarios"
@@ -1772,7 +1770,7 @@ object EnStrings : AppStrings {
   override val crashCopiedToast = "Crash report copied to clipboard"
   override val versionLabel = "Version"
   override val aboutNexoTitle = "About NexoFiles"
-  override val aboutNexoDesc = "NERV HUD Explorer v1.0 · Zero ads · Clean build"
+  override val aboutNexoDesc = "NERV HUD Explorer v1.2.0 · Zero ads · Clean build"
   override val privacyPolicyTitle = "Privacy Policy"
   override val privacyPolicyDesc = "Zero telemetry. All data stays on your device or your own Google Drive."
   override val helpFeedbackTitle = "Help & Feedback"
@@ -1982,7 +1980,7 @@ object EnStrings : AppStrings {
   override val vaultPassphrasePlaceholder = "Minimum 4 chars (also used in Safari/Web)"
   override val vaultBackupAllBtn = "Upload encrypted backup to Drive"
   override val vaultRefreshBackupsBtn = "List backups"
-  override val vaultNoDriveBackups = "✓ Bóveda Híbrida sincronizada: " + NexoVaultDriveMirror.ensureMirroredBackups(androidx.compose.ui.platform.LocalContext.current).size + " respaldo(s) .nexo_vault activos (AES-256-GCM)."
+  override val vaultNoDriveBackups = "No .nexo_vault backups found in Google Drive."
   override val vaultRestoreFromDriveBtn = "Decrypt to Vault"
   override val vaultPortalModalTitle = "Ephemeral Web / iPhone Access"
   override val vaultPortalModalDesc = "Generates a random session token and QR code to inspect & decrypt files locally in iPhone Safari or browser."

@@ -2,7 +2,6 @@ package com.example
 
 import android.app.DownloadManager
 import android.content.Context
-import android.content.res.Configuration
 import android.net.Uri
 import android.os.Environment
 import android.webkit.URLUtil
@@ -16,26 +15,26 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -91,34 +90,23 @@ object NexoVaultDriveMirror {
 
     fun ensureMirroredBackups(context: Context, passphrase: String = "nexo_default_sync"): List<File> {
         val mirrorDir = getMirrorDir(context)
-        val vaultDirs = listOf(
+        val candidates = listOf(
             File(context.filesDir, "vault"),
             File(context.filesDir, "nexo_vault"),
             File(context.filesDir, "private_vault"),
-            File(context.getExternalFilesDir(null), "vault")
+            File(context.getExternalFilesDir(null), "vault"),
+            context.filesDir
         )
-        for (vd in vaultDirs) {
+        for (vd in candidates) {
             if (vd.exists() && vd.isDirectory) {
                 vd.listFiles()?.forEach { src ->
-                    if (src.isFile && !src.name.endsWith(".meta")) {
+                    if (src.isFile && !src.name.endsWith(".meta") && !src.name.endsWith(".xml") && !src.name.endsWith(".db") && !src.name.endsWith(".txt") && src.length() > 0) {
                         val targetName = if (src.name.endsWith(".nexo_vault")) src.name else "${src.name}.nexo_vault"
                         val target = File(mirrorDir, targetName)
                         if (!target.exists()) {
                             runCatching { encryptFileToMirror(src, target, passphrase) }
                         }
                     }
-                }
-            }
-        }
-        val allVaultFiles = context.filesDir.listFiles()?.filter {
-            it.isFile && !it.name.endsWith(".xml") && !it.name.endsWith(".db") && it.length() > 0
-        } ?: emptyList()
-        if ((mirrorDir.listFiles()?.isEmpty() == true) && allVaultFiles.isNotEmpty()) {
-            allVaultFiles.forEach { src ->
-                val targetName = if (src.name.endsWith(".nexo_vault")) src.name else "${src.name}.nexo_vault"
-                val target = File(mirrorDir, targetName)
-                if (!target.exists()) {
-                    runCatching { encryptFileToMirror(src, target, passphrase) }
                 }
             }
         }
@@ -151,19 +139,17 @@ fun NexoEvaSingleLineSelector(
 ) {
     if (themes.isEmpty()) return
     var dropdownExpanded by remember { mutableStateOf(false) }
-    val totalVirtual = 10000
+    val totalVirtual = 6000
     val currentIdx = themes.indexOf(selectedTheme).coerceAtLeast(0)
     val startIdx = remember { (totalVirtual / 2) - ((totalVirtual / 2) % themes.size) + currentIdx }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIdx)
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
     var userScrolled by remember { mutableStateOf(false) }
 
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
             userScrolled = true
         } else if (userScrolled) {
-            val centerIdx = listState.firstVisibleItemIndex
-            val chosen = themes[centerIdx % themes.size]
+            val chosen = themes[listState.firstVisibleItemIndex % themes.size]
             if (chosen != selectedTheme) {
                 onSelect(chosen)
             }
@@ -174,27 +160,26 @@ fun NexoEvaSingleLineSelector(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(46.dp)
+            .height(48.dp)
             .clip(RoundedCornerShape(8.dp))
             .background(Color(0xFF10141D))
-            .border(1.dp, accentColor.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 6.dp),
-        contentAlignment = Alignment.CenterVertically
+            .border(1.dp, accentColor.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Palette,
+                imageVector = Icons.Default.Star,
                 contentDescription = null,
                 tint = accentColor,
-                modifier = Modifier.size(18.dp)
+                modifier = Modifier.size(16.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
             LazyRow(
                 state = listState,
-                flingBehavior = flingBehavior,
                 modifier = Modifier.weight(1f).fillMaxHeight(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -205,21 +190,19 @@ fun NexoEvaSingleLineSelector(
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSel) accentColor.copy(alpha = 0.22f) else Color.Transparent)
+                            .background(if (isSel) accentColor.copy(alpha = 0.22f) else Color(0xFF161B26))
                             .border(
-                                width = if (isSel) 1.dp else 0.5.dp,
+                                width = if (isSel) 1.5.dp else 0.5.dp,
                                 color = if (isSel) accentColor else Color.Gray.copy(alpha = 0.35f),
                                 shape = RoundedCornerShape(6.dp)
                             )
-                            .clickable {
-                                onSelect(item)
-                            }
+                            .clickable { onSelect(item) }
                             .padding(horizontal = 12.dp, vertical = 6.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
                             text = if (isSel) "● $item" else item,
-                            color = if (isSel) accentColor else Color.White.copy(alpha = 0.75f),
+                            color = if (isSel) accentColor else Color.White.copy(alpha = 0.8f),
                             fontSize = 12.sp,
                             fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
                             maxLines = 1,
@@ -235,7 +218,7 @@ fun NexoEvaSingleLineSelector(
             ) {
                 Icon(
                     imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Abrir lista de temas",
+                    contentDescription = "Lista de temas",
                     tint = accentColor
                 )
             }
@@ -274,7 +257,6 @@ fun NexoSimpleWebBrowserDialog(
     initialUrl: String = NexoNavBridge.webBrowserInitialUrl,
     onDismiss: () -> Unit
 ) {
-    val context = LocalContext.current
     var urlInput by remember { mutableStateOf(initialUrl) }
     var currentUrl by remember { mutableStateOf(initialUrl) }
     var immersiveWeb by remember { mutableStateOf(false) }
@@ -336,22 +318,14 @@ fun NexoSimpleWebBrowserDialog(
                             OutlinedTextField(
                                 value = urlInput,
                                 onValueChange = { urlInput = it },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(46.dp),
+                                modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 textStyle = LocalTextStyle.current.copy(
                                     color = Color.White,
                                     fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace
                                 ),
-                                placeholder = { Text("Buscar o escribir URL...", fontSize = 11.sp, color = Color.Gray) },
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Go),
-                                keyboardActions = KeyboardActions(onGo = { loadTarget(urlInput) }),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = accent,
-                                    unfocusedBorderColor = accent.copy(alpha = 0.4f)
-                                )
+                                placeholder = { Text("URL o búsqueda...", fontSize = 11.sp, color = Color.Gray) }
                             )
                             IconButton(
                                 onClick = { loadTarget(urlInput) },
@@ -359,11 +333,15 @@ fun NexoSimpleWebBrowserDialog(
                             ) {
                                 Icon(Icons.Default.Search, contentDescription = "Ir", tint = accent)
                             }
-                            IconButton(
-                                onClick = { immersiveWeb = true },
-                                modifier = Modifier.size(34.dp)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color(0xFF1A2234))
+                                    .border(1.dp, accent, RoundedCornerShape(6.dp))
+                                    .clickable { immersiveWeb = true }
+                                    .padding(horizontal = 6.dp, vertical = 4.dp)
                             ) {
-                                Icon(Icons.Default.Fullscreen, contentDescription = "Pantalla completa", tint = accent)
+                                Text("⛶", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
                             IconButton(
                                 onClick = onDismiss,
@@ -380,18 +358,18 @@ fun NexoSimpleWebBrowserDialog(
                             listOf(
                                 "Google" to "https://www.google.com",
                                 "DuckDuckGo" to "https://duckduckgo.com",
-                                "Manga" to "https://mangadex.org",
-                                "GitHub" to "https://github.com/romanje91-glitch/NexoFiles-"
-                            ).forEach { (label, link) ->
+                                "MangaDex" to "https://mangadex.org",
+                                "GitHub Release" to "https://github.com/romanje91-glitch/NexoFiles-/releases"
+                            ).forEach { pair ->
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(Color(0xFF1A2030))
                                         .border(0.5.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-                                        .clickable { loadTarget(link) }
+                                        .clickable { loadTarget(pair.second) }
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
-                                    Text(label, color = accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                                    Text(pair.first, color = accent, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
                                 }
                             }
                         }
@@ -422,7 +400,7 @@ fun NexoSimpleWebBrowserDialog(
                                     val req = DownloadManager.Request(Uri.parse(url))
                                     val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
                                     req.setTitle(fileName)
-                                    req.setDescription("Descargando desde NexoFiles Web...")
+                                    req.setDescription("Descargando archivo...")
                                     req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                                     req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
                                     req.addRequestHeader("User-Agent", userAgent)
@@ -430,7 +408,7 @@ fun NexoSimpleWebBrowserDialog(
                                     dm.enqueue(req)
                                     Toast.makeText(ctx, "Descargando: $fileName", Toast.LENGTH_LONG).show()
                                 }.onFailure {
-                                    Toast.makeText(ctx, "Error al descargar: ${it.message}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             loadUrl(currentUrl)
@@ -446,12 +424,12 @@ fun NexoSimpleWebBrowserDialog(
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.65f))
+                        .background(Color.Black.copy(alpha = 0.7f))
                         .border(1.dp, accent, RoundedCornerShape(20.dp))
                         .clickable { immersiveWeb = false }
                         .padding(horizontal = 10.dp, vertical = 6.dp)
                 ) {
-                    Text("⛶ BARRA", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                    Text("⛶ MOSTRAR BARRA", color = accent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

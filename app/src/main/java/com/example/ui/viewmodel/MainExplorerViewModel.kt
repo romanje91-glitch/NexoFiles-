@@ -1,5 +1,8 @@
 package com.example.ui.viewmodel
 
+import com.example.NexoNavBridge
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel

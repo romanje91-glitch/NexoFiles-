@@ -731,7 +731,7 @@ class ToolsAndNetworkViewModel(
           loadDriveFolder(parent)
           emitMessage("Carpeta creada en Google Drive")
         }
-        .onFailure { emitMessage((if (("\${it.localizedMessage}").contains("401") || ("\${it.localizedMessage}").contains("UNAUTHENTICATED")) "" else "Error Drive: \${it.localizedMessage}")) }
+        .onFailure { emitMessage("Error Drive: ${it.localizedMessage}") }
     }
   }
 
@@ -1261,13 +1261,13 @@ class ToolsAndNetworkViewModel(
           _vaultState.value = _vaultState.value.copy(
             driveBackups = entries,
             isDriveBusy = false,
-            driveStatusMessage = "${maxOf(${entries.size}.toString().toIntOrNull() ?: 0, NexoVaultDriveMirror.ensureMirroredBackups(androidx.compose.ui.platform.LocalContext.current).size)} respaldo(s) .nexo_vault en Drive",
+            driveStatusMessage = "${entries.size} respaldo(s) .nexo_vault en Drive",
           )
         }
         .onFailure { err ->
           _vaultState.value = _vaultState.value.copy(
             isDriveBusy = false,
-            driveStatusMessage = (if (("\${err.localizedMessage}").contains("401") || ("\${err.localizedMessage}").contains("UNAUTHENTICATED")) "" else "Error Drive: \${err.localizedMessage}"),
+            driveStatusMessage = "Error Drive: ${err.localizedMessage}",
           )
         }
     }

@@ -647,11 +647,7 @@ private fun NexoFilesRoot(
           }
         }
 
-        
-            if (NexoNavBridge.showWebBrowser) {
-                NexoSimpleWebBrowserDialog(onDismiss = { NexoNavBridge.showWebBrowser = false })
-            }
-            Scaffold(
+        Scaffold(
           containerColor = MaterialTheme.colorScheme.background,
           contentWindowInsets = WindowInsets.safeDrawing,
           snackbarHost = {
@@ -665,7 +661,7 @@ private fun NexoFilesRoot(
               )
             }
           },
-          bottomBar = {
+          bottomBar = { if (!NexoNavBridge.mediaImmersiveMode) 
             Column(modifier = Modifier.fillMaxWidth()) {
               AudioMiniPlayerBar(
                 state = audioState,
