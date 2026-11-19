@@ -588,51 +588,31 @@ Row(
         }
       }
 
-      // Multi-selection action bar
+      // Compact ES-style selection header (actions live in the single bottom bar)
       AnimatedVisibility(visible = uiState.selectedPaths.isNotEmpty()) {
-        BichromaticCard(
-          modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 6.dp),
-          elevated = true,
-          accentBorder = true,
+        Surface(
+          color = MaterialTheme.colorScheme.surface,
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+          shape = RoundedCornerShape(8.dp),
+          modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
         ) {
-          Column(modifier = Modifier.padding(10.dp)) {
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-              Text(
-                text = strings.selectedCount(uiState.selectedPaths.size).uppercase(),
-                style = MonoTnumStyle,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-              )
-              Row {
-                TextButton(onClick = onSelectAll) { Text(strings.selectAllCd.uppercase(), color = MaterialTheme.colorScheme.primary) }
-                TextButton(onClick = onClearSelection) { Text(strings.clear.uppercase(), color = NexoTheme.semantic.evaOrange) }
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Text(
+              text = "${uiState.selectedPaths.size} / ${uiState.files.size}",
+              style = MonoTnumStyle,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.primary,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              TextButton(onClick = onSelectAll, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                Text(strings.selectAllCd.uppercase(), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
               }
-            }
-            Row(
-              modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.SpaceEvenly,
-            ) {
-              val selectedList = uiState.selectedPaths.toList()
-              ActionIconButton(NexoIcons.ContentCopy, strings.actionCopy) {
-                onStageClipboard(selectedList, ClipboardAction.COPY)
-              }
-              ActionIconButton(NexoIcons.ContentCut, strings.actionMove) {
-                onStageClipboard(selectedList, ClipboardAction.MOVE)
-              }
-              ActionIconButton(NexoIcons.FolderZip, "ZIP") {
-                zipTargetPaths = selectedList
-              }
-              ActionIconButton(Icons.Rounded.Share, strings.share) {
-                onSharePaths(selectedList)
-              }
-              ActionIconButton(Icons.Rounded.Delete, strings.deleteCd, isAlert = true) {
-                onMoveToRecycleBin(selectedList)
+              TextButton(onClick = onClearSelection, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+                Text(strings.cancel.uppercase(), fontSize = 11.sp, color = NexoTheme.semantic.evaOrange)
               }
             }
           }
@@ -676,6 +656,10 @@ Row(
         }
       } else {
         fun handleItemClick(item: LocalFileItem) {
+        if (!item.isDirectory && item.name.endsWith(".torrent", ignoreCase = true) && uiState.selectedPaths.isEmpty()) {
+            NexoNavBridge.openTorrentWithFile(item.path)
+            return
+        }
         if (!item.isDirectory && NexoComicViewerState.isSupportedComicOrWebp(java.io.File(item.path))) {
             NexoComicViewerState.open(java.io.File(item.path))
             return
@@ -1139,7 +1123,8 @@ private fun FileListItemCard(
       Spacer(modifier = Modifier.width(10.dp))
 
       Box {
-        IconButton(
+        if (false) {
+IconButton(
           onClick = { menuExpanded = true },
           modifier = Modifier
             .size(34.dp)
@@ -1154,6 +1139,7 @@ private fun FileListItemCard(
             modifier = Modifier.size(18.dp),
           )
         }
+}
         DropdownMenu(
           expanded = menuExpanded,
           onDismissRequest = { menuExpanded = false },

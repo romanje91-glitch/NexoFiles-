@@ -619,7 +619,25 @@ object NexoTorrentEngine {
         }
     }
 
-    fun removeTask(id: String) {
+    suspend fun addLocalTorrentFile(filePath: String, onDone: (String) -> Unit) = withContext(Dispatchers.IO) {
+        val f = File(filePath)
+        if (!f.exists()) { onDone("Archivo .torrent no encontrado"); return@withContext }
+        if (!ensureStarted()) { onDone(engineStatus); return@withContext }
+        val id = "tor_${System.currentTimeMillis()}"
+        val saveDir = defaultSaveDir()
+        runCatching {
+            val tiClass = Class.forName("org.libtorrent4j.TorrentInfo")
+            val ti = tiClass.getConstructor(File::class.java).newInstance(f)
+            val tName = tiClass.getMethod("name").invoke(ti)?.toString() ?: f.nameWithoutExtension
+            withContext(Dispatchers.Main) {
+                tasks.add(0, NexoTorrentTask(id, tName, filePath, saveDir.absolutePath, statusText = "Conectando trackers..."))
+            }
+            startFromTorrentInfo(id, ti, filePath, saveDir)
+            onDone("Torrent iniciado: $tName")
+        }.onFailure { err -> onDone("Error .torrent: ${err.localizedMessage}") }
+    }
+
+    fun removeTask(id: String, deleteFiles: Boolean = false) {
         val h = handleMap.remove(id)
         val sm = sessionObj
         if (h != null && sm != null) {
@@ -627,6 +645,10 @@ object NexoTorrentEngine {
                 val rm = sm.javaClass.methods.firstOrNull { it.name == "remove" && it.parameterTypes.size == 1 }
                 rm?.invoke(sm, h)
             }
+        }
+        val target = tasks.firstOrNull { it.id == id }
+        if (deleteFiles && target != null) {
+            runCatching { File(target.saveDir, target.name).deleteRecursively() }
         }
         tasks.removeAll { it.id == id }
     }
@@ -648,12 +670,24 @@ private fun fmtSize(bytes: Long): String = when {
 @Composable
 fun NexoTorrentManagerDialog(
     initialMagnet: String = "",
+    initialTorrentPath: String = "",
     onOpenSaveFolder: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var magnetInput by remember(initialMagnet) { mutableStateOf(initialMagnet) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0=Todos, 1=Descargando, 2=Completados
+    var pendingDeleteTask by remember { mutableStateOf<NexoTorrentTask?>(null) }
+    var deleteWithFiles by remember { mutableStateOf(false) }
+
+    LaunchedEffect(initialTorrentPath) {
+        if (initialTorrentPath.isNotBlank()) {
+            NexoTorrentEngine.addLocalTorrentFile(initialTorrentPath) { msg ->
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
     val accent = MaterialTheme.colorScheme.primary
 
     val torrentPicker = rememberLauncherForActivityResult(
@@ -745,7 +779,29 @@ fun NexoTorrentManagerDialog(
                 ) { Text("📁 VER DESCARGAS", fontSize = 11.sp) }
             }
 
-            if (NexoTorrentEngine.tasks.isEmpty()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Todos", "Descargando", "Completados").forEachIndexed { idx, label ->
+                    val active = selectedTab == idx
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (active) accent.copy(alpha = 0.22f) else Color(0xFF131826),
+                        border = BorderStroke(1.dp, if (active) accent else Color(0xFF2B344A)),
+                        modifier = Modifier.weight(1f).clickable { selectedTab = idx }
+                    ) {
+                        Box(modifier = Modifier.padding(vertical = 6.dp), contentAlignment = Alignment.Center) {
+                            Text(label, color = if (active) accent else Color.White, fontSize = 11.sp, fontWeight = if (active) FontWeight.Bold else FontWeight.Normal)
+                        }
+                    }
+                }
+            }
+            val visibleTasks = NexoTorrentEngine.tasks.filter {
+                when (selectedTab) {
+                    1 -> it.progress < 0.999f
+                    2 -> it.progress >= 0.999f
+                    else -> true
+                }
+            }
+            if (visibleTasks.isEmpty()) {
                 Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text(
                         text = "Sin torrents activos.\nPega un enlace magnet:? o abre un archivo .torrent.",
@@ -758,7 +814,7 @@ fun NexoTorrentManagerDialog(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(NexoTorrentEngine.tasks, key = { it.id }) { task ->
+                    items(visibleTasks, key = { it.id }) { task ->
                         Surface(
                             shape = RoundedCornerShape(10.dp),
                             color = Color(0xFF131826),
@@ -805,7 +861,7 @@ fun NexoTorrentManagerDialog(
                                             onClick = { NexoTorrentEngine.togglePause(task.id) },
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp)
                                         ) { Text(if (task.isPaused) "▶ Reanudar" else "⏸ Pausar", fontSize = 11.sp) }
-                                        IconButton(onClick = { NexoTorrentEngine.removeTask(task.id) }, modifier = Modifier.size(32.dp)) {
+                                        IconButton(onClick = { deleteWithFiles = false; pendingDeleteTask = task }, modifier = Modifier.size(32.dp)) {
                                             Icon(Icons.Default.Delete, contentDescription = "Quitar", tint = Color(0xFFFF5555))
                                         }
                                     }
@@ -816,5 +872,34 @@ fun NexoTorrentManagerDialog(
                 }
             }
         }
+
+            pendingDeleteTask?.let { taskToDel ->
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteTask = null },
+                    title = { Text("¿Eliminar torrent?") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(taskToDel.name, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text("Eliminar también archivos descargados", fontSize = 12.sp)
+                                Switch(checked = deleteWithFiles, onCheckedChange = { deleteWithFiles = it })
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            NexoTorrentEngine.removeTask(taskToDel.id, deleteWithFiles)
+                            pendingDeleteTask = null
+                        }) { Text("Sí, eliminar") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingDeleteTask = null }) { Text("Cancelar") }
+                    }
+                )
+            }
     }
 }

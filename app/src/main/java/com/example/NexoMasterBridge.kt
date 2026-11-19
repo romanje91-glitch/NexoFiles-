@@ -79,6 +79,8 @@ object NexoNavBridge {
 
     var showTorrentManager by mutableStateOf(false)
     var pendingMagnetUri by mutableStateOf("")
+    var pendingTorrentFilePath by mutableStateOf("")
+    fun openTorrentWithFile(path: String) { pendingTorrentFilePath = path; showTorrentManager = true }
 
     var linkedGoogleEmail by mutableStateOf("")
     var onVaultFolderMoved: ((List<VaultFileItem>, String) -> Unit)? = null

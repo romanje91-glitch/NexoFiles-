@@ -611,6 +611,7 @@ private fun NexoFilesRoot(
   if (NexoNavBridge.showTorrentManager) {
     NexoTorrentManagerDialog(
       initialMagnet = NexoNavBridge.pendingMagnetUri,
+      initialTorrentPath = NexoNavBridge.pendingTorrentFilePath,
       onOpenSaveFolder = { dirPath ->
         explorerVm.loadDirectory(dirPath)
         if (currentRoute != NexoRoutes.HOME) navController.popBackStack(NexoRoutes.HOME, false)
@@ -620,6 +621,7 @@ private fun NexoFilesRoot(
       onDismiss = {
         NexoNavBridge.showTorrentManager = false
         NexoNavBridge.pendingMagnetUri = ""
+        NexoNavBridge.pendingTorrentFilePath = ""
       }
     )
   }
