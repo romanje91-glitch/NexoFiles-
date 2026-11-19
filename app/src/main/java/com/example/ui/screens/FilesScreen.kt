@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.material3.HorizontalDivider
 import com.example.NexoGlobalClipboard
 import com.example.NexoClipMode
 import androidx.compose.runtime.LaunchedEffect
@@ -335,7 +338,7 @@ NexoExplorerTabBar(currentPath = uiState.currentPath, onNavigatePath = onNavigat
 Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
       ) {
         Box(modifier = Modifier.weight(1f)) {
           BreadcrumbBar(
@@ -398,7 +401,7 @@ if (uiState.availableVolumes.size > 1) {
           modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
           uiState.availableVolumes.forEach { (label, volPath) ->
             val active = uiState.currentPath.startsWith(volPath)
@@ -502,7 +505,7 @@ Row(
           .fillMaxWidth()
           .horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
       ) {
         SortBy.entries.forEach { option ->
           val selected = uiState.sortBy == option
@@ -684,7 +687,7 @@ Row(
             items(rows, key = { it.first().path }) { rowItems ->
               Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
               ) {
                 rowItems.forEach { item ->
                   val isSelected = item.path in uiState.selectedPaths

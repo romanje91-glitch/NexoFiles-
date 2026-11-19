@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.unit.sp
+import com.example.NexoMultiGoogleStore
+import androidx.compose.ui.graphics.luminance
 import com.example.NexoNavBridge
 import android.app.Activity
 import android.content.Intent
@@ -99,6 +102,8 @@ fun GoogleDriveScreen(
   onConsentIntentResult: (Intent?) -> Unit,
   onConsumePendingConsent: () -> Unit,
   onDisconnect: () -> Unit,
+  onSwitchDriveAccount: (String) -> Unit = {},
+  onTransferToAccount: (DriveFileItem, String) -> Unit = { _, _ -> },
   onOpenFolder: (DriveFileItem) -> Unit,
   onClickBreadcrumb: (String) -> Unit = {},
   onNavigateUpDrive: () -> Boolean,
@@ -128,6 +133,7 @@ fun GoogleDriveScreen(
   val strings = LocalStrings.current
   var activeCloudTab by remember(initialCloudTab) { mutableIntStateOf(initialCloudTab) }
   var showCreateFolderDialog by remember { mutableStateOf(false) }
+  var transferTargetFile by remember { mutableStateOf<DriveFileItem?>(null) }
   var showAddRuleDialog by remember { mutableStateOf(false) }
   var searchQuery by remember { mutableStateOf("") }
   var showSearchBar by remember { mutableStateOf(false) }
@@ -171,6 +177,80 @@ fun GoogleDriveScreen(
     containerColor = MaterialTheme.colorScheme.background,
     bottomBar = {
       if (activeCloudTab == 0) {
+          LaunchedEffect(Unit) { NexoMultiGoogleStore.init(context) }
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .horizontalScroll(rememberScrollState())
+              .padding(horizontal = 12.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            NexoMultiGoogleStore.accounts.forEach { acc ->
+              val isActive = acc.email.equals(driveState.accountEmail, ignoreCase = true)
+              Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                modifier = Modifier.clickable { if (!isActive) onSwitchDriveAccount(acc.email) }
+              ) {
+                Text(
+                  text = (if (isActive) "● " else "") + acc.email.substringBefore("@"),
+                  color = if (isActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                  fontSize = 11.sp,
+                  fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal,
+                  modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+              }
+            }
+            OutlinedButton(
+              onClick = { onSilentRefreshGoogle() },
+              contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+              shape = RoundedCornerShape(16.dp),
+              modifier = Modifier.height(30.dp)
+            ) {
+              Text("+ Cuenta", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+            if (selectedDriveIds.size == 1 && NexoMultiGoogleStore.accounts.size > 1) {
+              val picked = driveState.files.firstOrNull { it.id in selectedDriveIds && !it.isFolder }
+              if (picked != null) {
+                Button(
+                  onClick = { transferTargetFile = picked },
+                  contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                  shape = RoundedCornerShape(16.dp),
+                  modifier = Modifier.height(30.dp)
+                ) {
+                  Text("⇄ Pasar a otra cuenta", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+              }
+            }
+          }
+          transferTargetFile?.let { f ->
+            AlertDialog(
+              onDismissRequest = { transferTargetFile = null },
+              title = { Text("Transferir a otra cuenta") },
+              text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                  Text("Archivo: ${f.name}", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                  NexoMultiGoogleStore.accounts
+                    .filterNot { it.email.equals(driveState.accountEmail, ignoreCase = true) }
+                    .forEach { acc ->
+                      OutlinedButton(
+                        onClick = {
+                          onTransferToAccount(f, acc.email)
+                          transferTargetFile = null
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                      ) { Text("☁️ ${acc.email}", fontSize = 12.sp) }
+                    }
+                }
+              },
+              confirmButton = {
+                TextButton(onClick = { transferTargetFile = null }) { Text("Cancelar") }
+              }
+            )
+          }
+
         Surface(
           color = MaterialTheme.colorScheme.surface,
           border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
@@ -579,11 +659,19 @@ fun GoogleDriveScreen(
             val visibleDriveFiles = if (searchQuery.isBlank()) {
               driveState.files
             } else {
-              driveState.files.filter { it.name.contains(searchQuery, ignoreCase = true) }
+              driveState.files.filterNot {
+      it.name.contains("nexo_system_appdata", ignoreCase = true) ||
+      it.name.equals("NexoVault_Encrypted", ignoreCase = true) ||
+      it.name.endsWith(".nexo_vault", ignoreCase = true)
+    }.filter { it.name.contains(searchQuery, ignoreCase = true) }
             }
             if (selectedDriveIds.isNotEmpty()) {
               item {
-                val chosenFiles = driveState.files.filter { it.id in selectedDriveIds }
+                val chosenFiles = driveState.files.filterNot {
+      it.name.contains("nexo_system_appdata", ignoreCase = true) ||
+      it.name.equals("NexoVault_Encrypted", ignoreCase = true) ||
+      it.name.endsWith(".nexo_vault", ignoreCase = true)
+    }.filter { it.id in selectedDriveIds }
                 Surface(
                   shape = RoundedCornerShape(6.dp),
                   color = NexoTheme.semantic.tacticalSurface,

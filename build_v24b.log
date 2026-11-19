@@ -1,0 +1,91 @@
+Starting a Gradle Daemon, 1 incompatible and 1 stopped Daemons could not be reused, use --status for details
+Calculating task graph as configuration cache cannot be reused because file 'app/build.gradle.kts' has changed.
+> Task :app:preBuild UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:processDebugGoogleServices UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:generateDebugBuildConfig
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :app:processDebugManifestForPackage
+> Task :app:processDebugResources
+> Task :app:kspDebugKotlin
+> Task :app:compileDebugKotlin
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2084:11 Unresolved reference 'OutlinedButton'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2086:30 Function invocation 'context(...)' expected.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2087:30 Unresolved reference 'checkAndInstallUpdate'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2087:52 Function invocation 'context(...)' expected.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2087:63 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2089:34 Function invocation 'context(...)' expected.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2089:70 Unresolved reference 'show'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2095:30 Unresolved reference 'PaddingValues'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2097:13 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2097:48 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2099:11 Unresolved reference 'OutlinedButton'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2101:15 Unresolved reference 'coroutineScope'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2101:39 Unresolved reference 'drawerState'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2102:15 Unresolved reference 'showShareAppDialog'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2106:30 Unresolved reference 'PaddingValues'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2108:13 @Composable invocations can only happen from the context of a @Composable function
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/MainActivity.kt:2108:50 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:199:33 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:206:27 Unresolved reference 'onConnectGoogle'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:211:46 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:222:63 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:233:60 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/GoogleDriveScreen.kt:243:65 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:177:5 Unresolved reference 'Toast'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:177:94 Unresolved reference 'Toast'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:803:11 Unresolved reference 'onClick'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:803:19 Syntax error: Expecting an element.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:803:19 Syntax error: Call has no callee.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:1014:31 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:1035:41 Unresolved reference 'sp'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:1036:15 Unresolved reference 'Switch'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/screens/SettingsScreen.kt:1038:37 Cannot infer type for this parameter. Specify it explicitly.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/viewmodel/ToolsAndNetworkViewModel.kt:1363:5 Unresolved reference 'loadDriveFiles'.
+e: file:///home/romanje91/nexofiles_build/app/src/main/java/com/example/ui/viewmodel/ToolsAndNetworkViewModel.kt:1377:61 Argument type mismatch: actual type is 'String', but 'DriveFileItem' was expected.
+
+> Task :app:compileDebugKotlin FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 46s
+32 actionable tasks: 8 executed, 24 up-to-date
+Configuration cache entry stored.

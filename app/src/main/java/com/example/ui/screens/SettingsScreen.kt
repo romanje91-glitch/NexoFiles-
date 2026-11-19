@@ -1,5 +1,15 @@
 package com.example.ui.screens
 
+import androidx.compose.material3.Switch
+import android.widget.Toast
+import androidx.compose.ui.unit.sp
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import com.example.NexoNotificationPrefs
 import com.example.NexoCrashLibraryDialog
 import com.example.NexoVaultSecurityStore
 import com.example.NexoMasterPinChangeDialog
@@ -158,6 +168,17 @@ fun SettingsScreen(
   var showLanguageModal by remember { mutableStateOf(false) }
   var showBottomBarDialog by remember { mutableStateOf(false) }
   var showCrashDiagnosticsDialog by remember { mutableStateOf(false) }
+  var showNotificationsDialog by remember { mutableStateOf(false) }
+  var notifPermGranted by remember {
+    mutableStateOf(
+      Build.VERSION.SDK_INT < 33 ||
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    )
+  }
+  val settingsNotifLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    notifPermGranted = granted
+    Toast.makeText(context, if (granted) "Notificaciones activadas" else "Permiso denegado", Toast.LENGTH_SHORT).show()
+  }
   var showVaultVerifyBeforeChange by remember { mutableStateOf(false) }
   var showVaultConfigModal by remember { mutableStateOf(false) }
   var updateCheckMessage by remember { mutableStateOf<String?>(null) }
@@ -779,7 +800,9 @@ fun SettingsScreen(
           Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+          OutlinedButton(onClick = { showNotificationsDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("🔔 NOTIFICACIONES DE LA APP", fontWeight = FontWeight.Bold) }
         Button(
+
           onClick = { showCrashDiagnosticsDialog = true },
           modifier = Modifier
             .fillMaxWidth()
@@ -966,6 +989,70 @@ fun SettingsScreen(
       onMoveTab = onMoveBottomBarTab,
       onResetDefaults = onResetBottomBarTabs,
       onDismiss = { showBottomBarDialog = false },
+    )
+  }
+
+  if (showNotificationsDialog) {
+    var nVault by remember { mutableStateOf(NexoNotificationPrefs.isEnabled(context, NexoNotificationPrefs.KEY_VAULT_BACKUP)) }
+    var nTor by remember { mutableStateOf(NexoNotificationPrefs.isEnabled(context, NexoNotificationPrefs.KEY_TORRENTS)) }
+    var nXfer by remember { mutableStateOf(NexoNotificationPrefs.isEnabled(context, NexoNotificationPrefs.KEY_TRANSFERS)) }
+    var nOta by remember { mutableStateOf(NexoNotificationPrefs.isEnabled(context, NexoNotificationPrefs.KEY_OTA)) }
+
+    AlertDialog(
+      onDismissRequest = { showNotificationsDialog = false },
+      title = { Text("🔔 Notificaciones de NexoFiles") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+          Surface(
+            shape = RoundedCornerShape(8.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+            modifier = Modifier.fillMaxWidth()
+          ) {
+            Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+              Text(
+                text = if (notifPermGranted) "✅ Permiso del sistema activo" else "⚠️ Permiso bloqueado en Android",
+                fontWeight = FontWeight.Bold,
+                color = if (notifPermGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                fontSize = 12.sp
+              )
+              if (!notifPermGranted && Build.VERSION.SDK_INT >= 33) {
+                Button(
+                  onClick = { settingsNotifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                  modifier = Modifier.fillMaxWidth()
+                ) { Text("Activar notificaciones ahora") }
+              }
+            }
+          }
+          listOf(
+            Triple("Respaldo de Bóveda (2º plano)", NexoNotificationPrefs.KEY_VAULT_BACKUP, nVault to { v: Boolean -> nVault = v }),
+            Triple("Descargas y NexoTorrent", NexoNotificationPrefs.KEY_TORRENTS, nTor to { v: Boolean -> nTor = v }),
+            Triple("Transferencias Wi-Fi / LAN", NexoNotificationPrefs.KEY_TRANSFERS, nXfer to { v: Boolean -> nXfer = v }),
+            Triple("Actualizaciones OTA", NexoNotificationPrefs.KEY_OTA, nOta to { v: Boolean -> nOta = v }),
+          ).forEach { (label, key, statePair) ->
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+              Text(label, fontSize = 12.sp, modifier = Modifier.weight(1f))
+              Switch(
+                checked = statePair.first,
+                onCheckedChange = { v ->
+                  statePair.second(v)
+                  NexoNotificationPrefs.setEnabled(context, key, v)
+                  if (v && !notifPermGranted && Build.VERSION.SDK_INT >= 33) {
+                    settingsNotifLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                  }
+                }
+              )
+            }
+          }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showNotificationsDialog = false }) { Text("Listo") }
+      }
     )
   }
 

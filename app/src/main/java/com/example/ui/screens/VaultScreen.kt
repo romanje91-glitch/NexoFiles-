@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.graphics.Color
@@ -147,6 +148,7 @@ fun VaultScreen(
   onRunSmartBackup: () -> Unit = { onBackupVaultToDrive("") },
   onDismissBackupProgress: () -> Unit = {},
   onCancelBackup: () -> Unit = {},
+  onTogglePauseBackup: () -> Unit = {},
   onPasteVault: () -> Unit = {},
   onBackupSelectedVaultToDrive: (String, Set<String>) -> Unit = { pass, _ -> onBackupVaultToDrive(pass) },
   onRestoreDriveBackup: (VaultBackupEntry, String) -> Unit = { _, _ -> },
@@ -1081,6 +1083,14 @@ fun VaultScreen(
             Text(countInfo, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
           }
           Text(etaLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+          if (state.isDriveBusy) {
+            OutlinedButton(
+              onClick = onTogglePauseBackup,
+              modifier = Modifier.fillMaxWidth()
+            ) {
+              Text(if (state.isBackupPaused) "▶ Reanudar respaldo" else "⏸ Pausar respaldo")
+            }
+          }
         }
       },
       confirmButton = {

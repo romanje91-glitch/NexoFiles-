@@ -1,5 +1,15 @@
 package com.example
 
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import com.example.NexoShareLinks
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import com.example.NexoNotificationPrefs
 import com.example.NexoCrashLibrary
 import com.example.NexoShareAppDialog
 import com.example.NexoMultiGoogleStore
@@ -360,7 +370,13 @@ private fun NexoFilesRoot(
   var chooserTargetGallery by remember { mutableStateOf<List<String>>(emptyList()) }
   var showFullAudioPlayer by remember { mutableStateOf(false) }
   var showShareAppDialog by remember { mutableStateOf(false) }
-  LaunchedEffect(driveState.accountEmail) { NexoMultiGoogleStore.registerAccount(context, driveState.accountEmail, driveState.accountName) }
+  val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+  LaunchedEffect(Unit) {
+    if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+      notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
+  LaunchedEffect(driveState.accountEmail, driveState.accessToken) { NexoMultiGoogleStore.registerAccount(context, driveState.accountEmail, driveState.accountName, driveState.accessToken) }
 
   val audioPlayer = remember(context) { AudioPlayerManager(context, coroutineScope) }
   DisposableEffect(audioPlayer) {
@@ -612,8 +628,8 @@ private fun NexoFilesRoot(
   }
 
   CompositionLocalProvider(LocalStrings provides strings) {
-    if (showShareAppDialog) {
-    NexoShareAppDialog(onDismiss = { showShareAppDialog = false })
+    if (showShareAppDialog || NexoShareLinks.showShareDialog) {
+    NexoShareAppDialog(onDismiss = { showShareAppDialog = false; NexoShareLinks.showShareDialog = false })
   }
   if (NexoNavBridge.showWebBrowser) {
     NexoSimpleWebBrowserDialog(onDismiss = { NexoNavBridge.showWebBrowser = false })
@@ -1017,6 +1033,7 @@ private fun NexoFilesRoot(
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
                     onCancelBackup = { toolsVm.cancelVaultBackup() },
+                    onTogglePauseBackup = { toolsVm.togglePauseVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                         onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                         onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
@@ -1503,6 +1520,7 @@ private fun NexoFilesRoot(
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
                     onCancelBackup = { toolsVm.cancelVaultBackup() },
+                    onTogglePauseBackup = { toolsVm.togglePauseVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                   onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                   onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
@@ -2062,6 +2080,17 @@ private fun NexoDrawerSheet(
           }
         }
       }
-    }
+        val drawerCtx = LocalContext.current
+        Spacer(modifier = Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(onClick = { NexoShareLinks.checkUpdateNow(drawerCtx) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
+            Text("↻ ACTUALIZAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+          }
+          OutlinedButton(onClick = { NexoShareLinks.showShareDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
+            Text("↗ COMPARTIR QR", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+          }
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+}
   }
 }

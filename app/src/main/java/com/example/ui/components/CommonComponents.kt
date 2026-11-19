@@ -155,14 +155,14 @@ fun ChamferedTechCard(
             color = tickColor,
             start = Offset(cPx + 6.dp.toPx(), 3.dp.toPx()),
             end = Offset(cPx + 28.dp.toPx(), 3.dp.toPx()),
-            strokeWidth = 1.5.dp.toPx(),
+            strokeWidth = 0.8.dp.toPx(),
             cap = StrokeCap.Square,
           )
           drawLine(
             color = tickColor,
             start = Offset(w - cPx - 28.dp.toPx(), h - 3.dp.toPx()),
             end = Offset(w - cPx - 6.dp.toPx(), h - 3.dp.toPx()),
-            strokeWidth = 1.5.dp.toPx(),
+            strokeWidth = 0.8.dp.toPx(),
             cap = StrokeCap.Square,
           )
         }
@@ -633,7 +633,7 @@ fun TacticalPatternGrid(
                 }
               )
               .border(
-                width = if (selected) 1.5.dp else 1.dp,
+                width = if (selected) 0.8.dp else 1.dp,
                 color = if (selected) activeBorder else secondaryColor.copy(alpha = 0.65f),
                 shape = nodeShape,
               )

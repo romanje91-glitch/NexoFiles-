@@ -1,5 +1,7 @@
 package com.example.ui.viewmodel
 
+import com.example.NexoNotificationPrefs
+import com.example.NexoMultiGoogleStore
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.os.Build
@@ -129,6 +131,7 @@ data class VaultUiState(
   val isDriveBusy: Boolean = false,
   val driveStatusMessage: String? = null,
   val showBackupProgressDialog: Boolean = false,
+  val isBackupPaused: Boolean = false,
   val backupProgress: Float = 0f,
   val backupDoneCount: Int = 0,
   val backupTotalCount: Int = 0,
@@ -1327,10 +1330,70 @@ class ToolsAndNetworkViewModel(
   }
 
   private var vaultBackupJob: Job? = null
+  @Volatile private var vaultBackupPaused: Boolean = false
+
+  fun togglePauseVaultBackup() {
+    vaultBackupPaused = !vaultBackupPaused
+    val pct = (_vaultState.value.backupProgress * 100f).toInt().coerceIn(0, 100)
+    _vaultState.value = _vaultState.value.copy(
+      isBackupPaused = vaultBackupPaused,
+      backupCurrentFileName = if (vaultBackupPaused) "Respaldo en pausa ($pct%)" else "Reanudando respaldo…"
+    )
+    if (vaultBackupPaused) {
+      updateVaultBackupNotification("Respaldo Bóveda en pausa ($pct%)", "Toca Reanudar dentro de la app", pct, true)
+    } else {
+      updateVaultBackupNotification("Respaldo Bóveda ($pct%)", "Reanudando subida a Google Drive…", pct, true)
+    }
+  }
+
+  fun switchActiveDriveAccount(email: String) {
+    val entry = NexoMultiGoogleStore.getAccount(email) ?: return
+    if (entry.accessToken.isBlank()) {
+      emitMessage("Inicia sesión con $email para actualizar su acceso a Drive")
+      return
+    }
+    _driveState.value = _driveState.value.copy(
+      accountEmail = entry.email,
+      accountName = entry.name,
+      accessToken = entry.accessToken,
+      isAuthorized = true,
+      currentFolderId = "root",
+      folderStack = listOf("root" to "Mi Unidad"),
+    )
+    // refresh on next open
+    emitMessage("Cuenta Drive activa: ${entry.email}")
+  }
+
+  fun transferDriveFileToAccount(file: com.example.data.model.DriveFileItem, targetEmail: String) {
+    val srcToken = _driveState.value.accessToken
+    val dstEntry = NexoMultiGoogleStore.getAccount(targetEmail)
+    if (srcToken.isNullOrBlank() || dstEntry == null || dstEntry.accessToken.isBlank()) {
+      emitMessage("Conecta primero la cuenta destino ($targetEmail) para transferir archivos")
+      return
+    }
+    viewModelScope.launch(Dispatchers.IO) {
+      emitMessage("Transfiriendo ${file.name} a $targetEmail…")
+      val tmp = File(context.cacheDir, "drive_xfer_${System.currentTimeMillis()}_${file.name}")
+      val dl = container.googleDrive.downloadFile(srcToken, file, tmp)
+      if (dl.isFailure) {
+        tmp.delete()
+        emitMessage("Error descargando desde cuenta origen")
+        return@launch
+      }
+      val up = container.googleDrive.uploadFile(dstEntry.accessToken, tmp, "root")
+      tmp.delete()
+      if (up.isSuccess) {
+        emitMessage("✓ ${file.name} transferido a $targetEmail")
+      } else {
+        emitMessage("Error subiendo a $targetEmail: ${up.exceptionOrNull()?.localizedMessage}")
+      }
+    }
+  }
   private val vaultBackupNotifId = 4092
   private val vaultBackupChannelId = "nexo_vault_backup_ch"
 
   private fun updateVaultBackupNotification(title: String, text: String, progress: Int, ongoing: Boolean) {
+    if (!NexoNotificationPrefs.isEnabled(context, NexoNotificationPrefs.KEY_VAULT_BACKUP)) return
     runCatching {
       val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -1362,12 +1425,14 @@ class ToolsAndNetworkViewModel(
   }
 
   fun cancelVaultBackup() {
+    vaultBackupPaused = false
     vaultBackupJob?.cancel()
     vaultBackupJob = null
     cancelVaultBackupNotification()
     _vaultState.value = _vaultState.value.copy(
       isDriveBusy = false,
       showBackupProgressDialog = false,
+      isBackupPaused = false,
       backupEtaSeconds = -1,
       driveStatusMessage = "Respaldo cancelado por el usuario",
     )
@@ -1384,6 +1449,7 @@ class ToolsAndNetworkViewModel(
     showProgressModal: Boolean = false,
   ) {
     val passphrase = rawPassphrase.trim().takeIf { it.length >= 4 } ?: NexoVaultSecurityStore.getBackupPassphrase(context)
+    vaultBackupPaused = false
     vaultBackupJob?.cancel()
     vaultBackupJob = viewModelScope.launch {
       if (showProgressModal) {
@@ -1456,6 +1522,10 @@ class ToolsAndNetworkViewModel(
           var uploaded = 0
           for ((idx, item) in pendingUpload.withIndex()) {
             ensureActive()
+            while (vaultBackupPaused) {
+              ensureActive()
+              delay(300)
+            }
             val curPct = (((idx.toFloat() / totalToUpload.toFloat()) * 0.92f + 0.05f) * 100f).toInt().coerceIn(5, 98)
             updateVaultBackupNotification("Respaldo Bóveda ($curPct%)", "Subiendo ${item.originalName} (${idx + 1}/$totalToUpload)", curPct, true)
             _vaultState.value = _vaultState.value.copy(

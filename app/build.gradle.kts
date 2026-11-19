@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.nexofiles.kxzqpm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 10
-    versionName = "2.3b"
+    versionCode = 11
+    versionName = "2.4b"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
