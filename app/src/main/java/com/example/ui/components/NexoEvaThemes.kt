@@ -41,6 +41,7 @@ object NexoEvaThemeManager {
     fun setTheme(context: Context, themeName: String) {
         currentTheme = themeName
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY_THEME, themeName).apply()
+        NexoDynamicIconManager.applyThemeIcon(context, themeName)
     }
 
     val activePalette: EvaUnitPalette

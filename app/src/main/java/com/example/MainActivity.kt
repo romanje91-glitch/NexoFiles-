@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.ui.components.NexoXmbWaveBackground
 import androidx.compose.runtime.SideEffect
 import com.example.NexoGlobalClipboard
 import com.example.NexoGlobalClipboardBar
@@ -822,14 +823,16 @@ private fun NexoFilesRoot(
               }
             }
 
-            NavHost(
+            Box(modifier = Modifier.weight(1f)) {
+              NexoXmbWaveBackground(modifier = Modifier.fillMaxSize())
+              NavHost(
               navController = navController,
               startDestination = NexoRoutes.HOME,
               enterTransition = { EnterTransition.None },
               exitTransition = { ExitTransition.None },
               popEnterTransition = { EnterTransition.None },
               popExitTransition = { ExitTransition.None },
-              modifier = Modifier.weight(1f),
+              modifier = Modifier.fillMaxSize(),
             ) {
               composable(NexoRoutes.HOME) {
                 val activeTabId = bottomTabs.getOrNull(pagerState.currentPage)?.id ?: "HOME"
@@ -1000,6 +1003,9 @@ private fun NexoFilesRoot(
                         onConnectDrive = { toolsVm.connectGoogleDrive(context) },
                         onRefreshDriveBackups = toolsVm::refreshVaultDriveBackups,
                         onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
+                    onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
+                    onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                         onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                         onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
                         onRestoreSelectedDriveBackups = toolsVm::restoreSelectedVaultBackupsFromDrive,
@@ -1482,6 +1488,9 @@ private fun NexoFilesRoot(
                   onConnectDrive = { toolsVm.connectGoogleDrive(context) },
                   onRefreshDriveBackups = toolsVm::refreshVaultDriveBackups,
                   onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
+                    onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
+                    onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                   onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                   onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
                   onRestoreSelectedDriveBackups = toolsVm::restoreSelectedVaultBackupsFromDrive,
@@ -1551,6 +1560,7 @@ private fun NexoFilesRoot(
                   onBack = { navController.popBackStack() },
                 )
               }
+            }
             }
           }
         }

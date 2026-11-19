@@ -1,5 +1,19 @@
 package com.example.ui.screens
 
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
+import kotlin.math.roundToInt
 import com.example.NexoGlobalClipboard
 import com.example.NexoClipMode
 import com.example.NexoVaultSecurityStore
@@ -130,6 +144,9 @@ fun VaultScreen(
   onConnectDrive: () -> Unit = {},
   onRefreshDriveBackups: () -> Unit = {},
   onBackupVaultToDrive: (String) -> Unit = {},
+  onRunSmartBackup: () -> Unit = { onBackupVaultToDrive("") },
+  onDismissBackupProgress: () -> Unit = {},
+  onPasteVault: () -> Unit = {},
   onBackupSelectedVaultToDrive: (String, Set<String>) -> Unit = { pass, _ -> onBackupVaultToDrive(pass) },
   onRestoreDriveBackup: (VaultBackupEntry, String) -> Unit = { _, _ -> },
   onRestoreSelectedDriveBackups: (List<VaultBackupEntry>, String) -> Unit = { list, pass -> list.firstOrNull()?.let { onRestoreDriveBackup(it, pass) } },
@@ -164,6 +181,10 @@ fun VaultScreen(
   var showPortalModal by remember { mutableStateOf(false) }
   var selectedVaultIds by remember(state.items) { mutableStateOf(setOf<String>()) }
   var showMoveToFolderDialog by remember { mutableStateOf(false) }
+  var draggingVaultItem by remember { mutableStateOf<VaultFileItem?>(null) }
+  var dragFingerRoot by remember { mutableStateOf(Offset.Zero) }
+  var hoveredDropFolder by remember { mutableStateOf<String?>(null) }
+  val folderDropBounds = remember { mutableStateMapOf<String, Rect>() }
 
   BackHandler(enabled = !NexoNavBridge.isInMainPager || NexoNavBridge.activePagerTabId == "VAULT") {
     when {
@@ -649,7 +670,7 @@ fun VaultScreen(
           contentPadding = PaddingValues(bottom = 24.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          item { NexoSecureVaultSummaryPanel(localCount = state.items.size, localBytes = state.items.sumOf { it.sizeBytes }, cloudCount = state.driveBackups.size, onOpenDriveBackupModal = { showDriveBackupModal = true }) }
+          item { NexoSecureVaultSummaryPanel(localCount = state.items.size, localBytes = state.items.sumOf { it.sizeBytes }, cloudCount = state.driveBackups.size, onOpenDriveBackupModal = { onRunSmartBackup() }) }
                 
       item(key = "vault_folders_bar") {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -659,37 +680,66 @@ fun VaultScreen(
             horizontalArrangement = Arrangement.SpaceBetween
           ) {
             Text(
-              text = if (NexoVaultExtraStore.activeFolder != null) "📁 CARPETA: ${NexoVaultExtraStore.activeFolder}" else "CARPETAS SEGURAS (${NexoVaultExtraStore.folders.size})",
+              text = when {
+                draggingVaultItem != null -> "✋ SUELTA SOBRE UNA CARPETA"
+                NexoVaultExtraStore.activeFolder != null -> "📁 CARPETA: ${NexoVaultExtraStore.activeFolder}"
+                else -> "CARPETAS SEGURAS (${NexoVaultExtraStore.folders.size})"
+              },
               style = MaterialTheme.typography.labelMedium,
               color = MaterialTheme.colorScheme.primary
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
               if (NexoVaultExtraStore.activeFolder != null) {
                 OutlinedButton(
                   onClick = { NexoVaultExtraStore.activeFolder = null },
-                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
                 ) { Text("← TODAS", style = MaterialTheme.typography.labelSmall) }
               }
               OutlinedButton(
                 onClick = { showNewVaultFolderDialog = true },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
               ) { Text("+ CARPETA", style = MaterialTheme.typography.labelSmall) }
+              OutlinedButton(
+                onClick = { onRunSmartBackup() },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)
+              ) { Text("☁️ SYNC", style = MaterialTheme.typography.labelSmall) }
             }
           }
-          if (NexoVaultExtraStore.folders.isNotEmpty() && NexoVaultExtraStore.activeFolder == null) {
+          if (NexoVaultExtraStore.folders.isNotEmpty() || draggingVaultItem != null) {
             Row(
               modifier = Modifier.fillMaxWidth(),
-              horizontalArrangement = Arrangement.spacedBy(8.dp)
+              horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-              NexoVaultExtraStore.folders.take(4).forEach { folderName ->
+              if (draggingVaultItem != null || NexoVaultExtraStore.activeFolder != null) {
+                val isRootHot = hoveredDropFolder == "__ROOT__"
                 Surface(
                   shape = RoundedCornerShape(8.dp),
-                  color = MaterialTheme.colorScheme.surface,
-                  border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                  modifier = Modifier.clickable { NexoVaultExtraStore.activeFolder = folderName }
+                  color = if (isRootHot) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
+                  border = BorderStroke(if (isRootHot) 2.dp else 1.dp, if (isRootHot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)),
+                  modifier = Modifier
+                    .onGloballyPositioned { folderDropBounds["__ROOT__"] = it.boundsInRoot() }
+                    .clickable { NexoVaultExtraStore.activeFolder = null }
                 ) {
                   Text(
-                    text = "🔒 $folderName",
+                    text = "🔒 Raíz",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                  )
+                }
+              }
+              NexoVaultExtraStore.folders.take(4).forEach { folderName ->
+                val isHot = hoveredDropFolder == folderName
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = if (isHot) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else MaterialTheme.colorScheme.surface,
+                  border = BorderStroke(if (isHot) 2.dp else 1.dp, if (isHot) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                  modifier = Modifier
+                    .onGloballyPositioned { folderDropBounds[folderName] = it.boundsInRoot() }
+                    .clickable { NexoVaultExtraStore.activeFolder = folderName }
+                ) {
+                  Text(
+                    text = "📁 $folderName",
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -700,7 +750,7 @@ fun VaultScreen(
           }
         }
       }
-      if (selectedVaultIds.isNotEmpty()) {
+      if (selectedVaultIds.isNotEmpty() || NexoGlobalClipboard.hasItems()) {
         item(key = "vault_es_action_bar") {
           Surface(
             shape = RoundedCornerShape(10.dp),
@@ -709,39 +759,50 @@ fun VaultScreen(
             modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
           ) {
             Row(
-              modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 6.dp),
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-              OutlinedButton(
-                onClick = {
-                  val picked = state.items.filter { it.id in selectedVaultIds }
-                  NexoGlobalClipboard.stageVault(picked, NexoClipMode.COPY)
-                  selectedVaultIds = emptySet()
-                  Toast.makeText(context, "${picked.size} copiado(s) · Ve a otra carpeta o Archivos y toca PEGAR", Toast.LENGTH_SHORT).show()
-                },
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                modifier = Modifier.weight(1f)
-              ) { Text("📋 COPIAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
-              OutlinedButton(
-                onClick = {
-                  val picked = state.items.filter { it.id in selectedVaultIds }
-                  NexoGlobalClipboard.stageVault(picked, NexoClipMode.MOVE)
-                  selectedVaultIds = emptySet()
-                  Toast.makeText(context, "${picked.size} cortado(s) · Abre carpeta o Archivos y toca PEGAR", Toast.LENGTH_SHORT).show()
-                },
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                modifier = Modifier.weight(1f)
-              ) { Text("✂️ CORTAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
-              OutlinedButton(
-                onClick = { showMoveToFolderDialog = true },
-                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
-                modifier = Modifier.weight(1f)
-              ) { Text("📁 CARPETA", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
-              TextButton(
-                onClick = { selectedVaultIds = emptySet() },
-                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-              ) { Text("✖", color = MaterialTheme.colorScheme.error) }
+              if (selectedVaultIds.isNotEmpty()) {
+                OutlinedButton(
+                  onClick = {
+                    val picked = state.items.filter { it.id in selectedVaultIds }
+                    NexoGlobalClipboard.stageVault(picked, NexoClipMode.COPY)
+                    selectedVaultIds = emptySet()
+                    Toast.makeText(context, "${picked.size} copiado(s)", Toast.LENGTH_SHORT).show()
+                  },
+                  contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f)
+                ) { Text("📋 COPIAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+                OutlinedButton(
+                  onClick = {
+                    val picked = state.items.filter { it.id in selectedVaultIds }
+                    NexoGlobalClipboard.stageVault(picked, NexoClipMode.MOVE)
+                    selectedVaultIds = emptySet()
+                    Toast.makeText(context, "${picked.size} cortado(s)", Toast.LENGTH_SHORT).show()
+                  },
+                  contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f)
+                ) { Text("✂️ CORTAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+                OutlinedButton(
+                  onClick = { showMoveToFolderDialog = true },
+                  contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f)
+                ) { Text("↪ MOVER", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+              }
+              if (NexoGlobalClipboard.hasItems()) {
+                Button(
+                  onClick = { onPasteVault() },
+                  contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                  modifier = Modifier.weight(1f)
+                ) { Text("📥 PEGAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+              }
+              if (selectedVaultIds.isNotEmpty()) {
+                TextButton(
+                  onClick = { selectedVaultIds = emptySet() },
+                  contentPadding = PaddingValues(horizontal = 2.dp, vertical = 0.dp)
+                ) { Text("✖", color = MaterialTheme.colorScheme.error) }
+              }
             }
           }
         }
@@ -783,21 +844,52 @@ fun VaultScreen(
               accentBorder = isOpeningThis || isChecked,
               onClick = { onOpenVaultItem(item) },
             ) {
+              var itemRootTopLeft by remember(item.id) { mutableStateOf(Offset.Zero) }
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
-                  .combinedClickable(
-                    onClick = {
-                      if (selectedVaultIds.isNotEmpty()) {
-                        selectedVaultIds = if (item.id in selectedVaultIds) selectedVaultIds - item.id else selectedVaultIds + item.id
-                      } else {
-                        onOpenVaultItem(item)
+                  .onGloballyPositioned { coords -> itemRootTopLeft = coords.boundsInRoot().topLeft }
+                  .pointerInput(item.id, selectedVaultIds) {
+                    var totalDragPx = 0f
+                    detectDragGesturesAfterLongPress(
+                      onDragStart = { startOffset ->
+                        totalDragPx = 0f
+                        draggingVaultItem = item
+                        dragFingerRoot = itemRootTopLeft + startOffset
+                        hoveredDropFolder = folderDropBounds.entries.firstOrNull { it.value.contains(dragFingerRoot) }?.key
+                      },
+                      onDrag = { change, dragAmount ->
+                        change.consume()
+                        totalDragPx += dragAmount.getDistance()
+                        dragFingerRoot = itemRootTopLeft + change.position
+                        hoveredDropFolder = folderDropBounds.entries.firstOrNull { it.value.contains(dragFingerRoot) }?.key
+                      },
+                      onDragCancel = {
+                        draggingVaultItem = null
+                        hoveredDropFolder = null
+                      },
+                      onDragEnd = {
+                        val dropTarget = hoveredDropFolder
+                        val grabbed = draggingVaultItem
+                        draggingVaultItem = null
+                        hoveredDropFolder = null
+                        if (totalDragPx < 24f) {
+                          selectedVaultIds = if (item.id in selectedVaultIds) selectedVaultIds - item.id else selectedVaultIds + item.id
+                        } else if (grabbed != null && dropTarget != null) {
+                          val folderDest = if (dropTarget == "__ROOT__") "" else dropTarget
+                          NexoNavBridge.onVaultFolderMoved?.invoke(listOf(grabbed), folderDest)
+                            ?: NexoVaultExtraStore.assignToFolder(context, grabbed.id, folderDest)
+                        }
                       }
-                    },
-                    onLongClick = {
+                    )
+                  }
+                  .clickable {
+                    if (selectedVaultIds.isNotEmpty()) {
                       selectedVaultIds = if (item.id in selectedVaultIds) selectedVaultIds - item.id else selectedVaultIds + item.id
-                    },
-                  )
+                    } else {
+                      onOpenVaultItem(item)
+                    }
+                  }
                   .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
               ) {
@@ -917,6 +1009,93 @@ fun VaultScreen(
       onStartPortal = onStartPortal,
       onStopPortal = onStopPortal,
       onDismiss = { showPortalModal = false },
+    )
+  }
+
+  draggingVaultItem?.let { grabbed ->
+    Dialog(
+      onDismissRequest = { draggingVaultItem = null; hoveredDropFolder = null },
+      properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+      Box(modifier = Modifier.fillMaxSize()) {
+        Surface(
+          shape = RoundedCornerShape(12.dp),
+          color = MaterialTheme.colorScheme.primary.copy(alpha = 0.92f),
+          border = BorderStroke(1.5.dp, Color.White),
+          modifier = Modifier
+            .offset { IntOffset((dragFingerRoot.x - 140f).roundToInt().coerceAtLeast(12), (dragFingerRoot.y - 120f).roundToInt().coerceAtLeast(12)) }
+            .zIndex(99f)
+        ) {
+          Text(
+            text = "✋ ${grabbed.originalName.take(26)}" + (hoveredDropFolder?.let { if (it == "__ROOT__") " → 🔒 Raíz" else " → 📁 $it" } ?: ""),
+            color = MaterialTheme.colorScheme.onPrimary,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+          )
+        }
+      }
+    }
+  }
+
+  if (state.showBackupProgressDialog) {
+    val pct = (state.backupProgress * 100f).roundToInt().coerceIn(0, 100)
+    val etaLabel = when {
+      !state.isDriveBusy && pct >= 100 -> "Finalizado"
+      state.backupEtaSeconds < 0 -> "Calculando tiempo…"
+      state.backupEtaSeconds < 60 -> "Tiempo restante: ~${state.backupEtaSeconds} s"
+      else -> "Tiempo restante: ~${state.backupEtaSeconds / 60}m ${state.backupEtaSeconds % 60}s"
+    }
+    AlertDialog(
+      onDismissRequest = { if (!state.isDriveBusy) onDismissBackupProgress() },
+      title = {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically
+        ) {
+          Text("Respaldo en la Nube", style = MaterialTheme.typography.titleMedium)
+          Text("$pct%", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+        }
+      },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+          LinearProgressIndicator(
+            progress = { state.backupProgress.coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(7.dp).clip(RoundedCornerShape(4.dp)),
+            color = MaterialTheme.colorScheme.primary,
+          )
+          Text(
+            text = state.backupCurrentFileName.ifBlank { "Sincronizando respaldos cifrados…" },
+            style = MaterialTheme.typography.bodySmall,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+          )
+          val countInfo = if (state.backupTotalCount > 0) {
+            "Subiendo ${state.backupDoneCount} de ${state.backupTotalCount} nuevo(s)" +
+              if (state.backupSkippedCount > 0) " · ${state.backupSkippedCount} ya en Drive" else ""
+          } else if (state.backupSkippedCount > 0) {
+            "${state.backupSkippedCount} archivo(s) ya respaldados en Drive"
+          } else ""
+          if (countInfo.isNotBlank()) {
+            Text(countInfo, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+          }
+          Text(etaLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+      },
+      confirmButton = {
+        if (!state.isDriveBusy) {
+          Button(onClick = onDismissBackupProgress) { Text("Listo") }
+        }
+      },
+      dismissButton = {
+        if (!state.isDriveBusy) {
+          TextButton(onClick = {
+            onDismissBackupProgress()
+            showDriveBackupModal = true
+          }) { Text("Ver / Restaurar") }
+        }
+      }
     )
   }
 

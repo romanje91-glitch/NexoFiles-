@@ -122,6 +122,13 @@ data class VaultUiState(
   val driveBackups: List<VaultBackupEntry> = emptyList(),
   val isDriveBusy: Boolean = false,
   val driveStatusMessage: String? = null,
+  val showBackupProgressDialog: Boolean = false,
+  val backupProgress: Float = 0f,
+  val backupDoneCount: Int = 0,
+  val backupTotalCount: Int = 0,
+  val backupSkippedCount: Int = 0,
+  val backupEtaSeconds: Int = -1,
+  val backupCurrentFileName: String = "",
 )
 
 class ToolsAndNetworkViewModel(
@@ -1172,6 +1179,12 @@ class ToolsAndNetworkViewModel(
       _vaultState.value = _vaultState.value.copy(isUnlocked = true, isBusy = true)
       val items = container.vault.listVaultItems()
       _vaultState.value = _vaultState.value.copy(items = items, isBusy = false)
+      launch(Dispatchers.IO) {
+        items.filter { it.sizeBytes in 1L..(25L * 1024L * 1024L) }.take(24).forEach { vItem ->
+          if (!_vaultState.value.isUnlocked) return@launch
+          runCatching { container.vault.decryptToCacheAndOpen(vItem) }
+        }
+      }
       if (!_driveState.value.accessToken.isNullOrBlank()) {
         refreshVaultDriveBackups()
       }
@@ -1307,60 +1320,133 @@ class ToolsAndNetworkViewModel(
     }
   }
 
-  fun backupVaultToDrive(rawPassphrase: String = "", selectedIds: Set<String> = emptySet()) {
+  fun dismissVaultBackupProgress() {
+    _vaultState.value = _vaultState.value.copy(showBackupProgressDialog = false)
+  }
+
+  fun backupVaultToDrive(
+    rawPassphrase: String = "",
+    selectedIds: Set<String> = emptySet(),
+    showProgressModal: Boolean = false,
+  ) {
     val passphrase = rawPassphrase.trim().takeIf { it.length >= 4 } ?: NexoVaultSecurityStore.getBackupPassphrase(context)
     viewModelScope.launch {
       _vaultState.value = _vaultState.value.copy(
         isDriveBusy = true,
-        driveStatusMessage = "Sincronizando respaldos cifrados .nexo_vault con Google Drive…",
+        showBackupProgressDialog = showProgressModal,
+        backupProgress = 0.05f,
+        backupDoneCount = 0,
+        backupTotalCount = 0,
+        backupSkippedCount = 0,
+        backupEtaSeconds = -1,
+        backupCurrentFileName = "Verificando archivos en Google Drive…",
+        driveStatusMessage = "Verificando respaldos en Google Drive…",
       )
       val stageDir = File(context.cacheDir, "vault_drive_stage").apply {
         deleteRecursively()
         mkdirs()
       }
+      val startMs = System.currentTimeMillis()
       withDriveTokenRetry { token ->
         runCatching {
           val allVaultItems = container.vault.listVaultItems()
           val targets = if (selectedIds.isEmpty()) allVaultItems else allVaultItems.filter { it.id in selectedIds }
-          if (targets.isEmpty()) return@runCatching 0
+          if (targets.isEmpty()) return@runCatching Triple(0, 0, 0)
+
           val existingRemote = container.googleDrive.listVaultBackups(token).getOrNull().orEmpty()
-          var uploaded = 0
+          val pendingUpload = mutableListOf<VaultFileItem>()
+          var skippedAlreadySynced = 0
+
           for (item in targets) {
             val folderName = NexoVaultExtraStore.itemFolderMap[item.id].orEmpty()
-            val targetFolderId = container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
             val expectedRemoteName = "${item.originalName}.nexo_vault"
             val matchRemote = existingRemote.firstOrNull {
               it.name.equals(expectedRemoteName, ignoreCase = true) ||
                 it.name.removeSuffix(".nexo_vault").equals(item.originalName, ignoreCase = true)
             }
             if (matchRemote != null) {
-              container.googleDrive.moveDriveFileToFolder(token, matchRemote.id, targetFolderId)
-              uploaded++
-              continue
+              val remoteFolder = NexoVaultExtraStore.driveBackupFolderMap[matchRemote.id].orEmpty()
+              if (remoteFolder != folderName) {
+                val targetFolderId = container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
+                container.googleDrive.moveDriveFileToFolder(token, matchRemote.id, targetFolderId)
+              }
+              skippedAlreadySynced++
+            } else {
+              pendingUpload.add(item)
             }
+          }
+
+          val totalToUpload = pendingUpload.size
+          if (totalToUpload == 0) {
+            _vaultState.value = _vaultState.value.copy(
+              backupProgress = 1f,
+              backupDoneCount = 0,
+              backupTotalCount = 0,
+              backupSkippedCount = skippedAlreadySynced,
+              backupEtaSeconds = 0,
+              backupCurrentFileName = "Todo respaldado al día",
+            )
+            return@runCatching Triple(0, skippedAlreadySynced, 0)
+          }
+
+          _vaultState.value = _vaultState.value.copy(
+            backupTotalCount = totalToUpload,
+            backupSkippedCount = skippedAlreadySynced,
+            backupProgress = 0.08f,
+          )
+
+          var uploaded = 0
+          for ((idx, item) in pendingUpload.withIndex()) {
+            _vaultState.value = _vaultState.value.copy(
+              backupCurrentFileName = item.originalName,
+              backupDoneCount = idx,
+              backupProgress = ((idx.toFloat() / totalToUpload.toFloat()) * 0.92f + 0.05f).coerceIn(0.05f, 0.98f),
+            )
+            val folderName = NexoVaultExtraStore.itemFolderMap[item.id].orEmpty()
+            val targetFolderId = container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
             val singleDir = File(stageDir, item.id).apply { mkdirs() }
             val exported = container.vault.exportSelectedVaultToNxv(listOf(item), passphrase, singleDir).getOrThrow()
             for (nxv in exported) {
               val res = container.googleDrive.uploadFile(token, nxv, targetFolderId)
               if (res.isSuccess) uploaded++
             }
+            val doneNow = idx + 1
+            val elapsedMs = (System.currentTimeMillis() - startMs).coerceAtLeast(300L)
+            val avgPerItemMs = elapsedMs / doneNow
+            val remSec = (((totalToUpload - doneNow) * avgPerItemMs) / 1000L).toInt().coerceAtLeast(0)
+            _vaultState.value = _vaultState.value.copy(
+              backupDoneCount = doneNow,
+              backupProgress = (doneNow.toFloat() / totalToUpload.toFloat()).coerceIn(0f, 1f),
+              backupEtaSeconds = remSec,
+            )
           }
-          uploaded
+          Triple(uploaded, skippedAlreadySynced, totalToUpload)
         }
-      }.onSuccess { count ->
+      }.onSuccess { (uploaded, skipped, _) ->
         stageDir.deleteRecursively()
+        val msg = when {
+          uploaded == 0 && skipped > 0 -> "✓ Todo al día ($skipped ya estaban en la nube)"
+          uploaded > 0 && skipped > 0 -> "✓ Respaldo completado: $uploaded nuevo(s) ($skipped omitidos)"
+          else -> "✓ Respaldo completado ($uploaded archivo(s))"
+        }
         _vaultState.value = _vaultState.value.copy(
           isDriveBusy = false,
-          driveStatusMessage = "Respaldo Drive al día ($count archivo(s) .nexo_vault)",
+          backupProgress = 1f,
+          backupEtaSeconds = 0,
+          backupCurrentFileName = msg,
+          driveStatusMessage = msg,
         )
         refreshVaultDriveBackups()
-        if (count > 0) emitMessage("Bóveda sincronizada con Drive ($count archivo(s))")
+        emitMessage(msg)
       }.onFailure { err ->
         stageDir.deleteRecursively()
         _vaultState.value = _vaultState.value.copy(
           isDriveBusy = false,
+          backupEtaSeconds = -1,
+          backupCurrentFileName = "Error: ${err.localizedMessage}",
           driveStatusMessage = "Error en respaldo: ${err.localizedMessage}",
         )
+        emitMessage("Error respaldando en Drive: ${err.localizedMessage}")
       }
     }
   }

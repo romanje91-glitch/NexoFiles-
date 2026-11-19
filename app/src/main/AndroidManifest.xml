@@ -38,10 +38,10 @@
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_nexo_eva_01"
         android:label="@string/app_name"
         android:requestLegacyExternalStorage="true"
-        android:roundIcon="@mipmap/ic_launcher_round"
+        android:roundIcon="@drawable/ic_nexo_eva_01"
         android:supportsRtl="true"
         android:theme="@style/Theme.NexoFiles"
         android:usesCleartextTraffic="true">
@@ -53,10 +53,6 @@
             android:label="@string/app_name"
             android:theme="@style/Theme.NexoFiles"
             android:windowSoftInputMode="adjustResize">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
         </activity>
 
         <provider
@@ -68,6 +64,103 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+    
+        <activity-alias
+            android:name=".LauncherEva00"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_00"
+            android:roundIcon="@drawable/ic_nexo_eva_00"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva01"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_01"
+            android:roundIcon="@drawable/ic_nexo_eva_01"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva02"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_02"
+            android:roundIcon="@drawable/ic_nexo_eva_02"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva03"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_03"
+            android:roundIcon="@drawable/ic_nexo_eva_03"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva04"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_04"
+            android:roundIcon="@drawable/ic_nexo_eva_04"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva05"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_05"
+            android:roundIcon="@drawable/ic_nexo_eva_05"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva08"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_08"
+            android:roundIcon="@drawable/ic_nexo_eva_08"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
+        <activity-alias
+            android:name=".LauncherEva13"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@drawable/ic_nexo_eva_13"
+            android:roundIcon="@drawable/ic_nexo_eva_13"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
     </application>
 
 </manifest>

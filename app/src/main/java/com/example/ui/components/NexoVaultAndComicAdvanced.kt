@@ -681,13 +681,13 @@ object NexoOtaUpdater {
         Thread {
             try {
                 val installedVer = try {
-                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.4.0"
-                } catch (_: Throwable) { "1.4.0" }
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "2.0b"
+                } catch (_: Throwable) { "2.0b" }
 
                 fun parseVer(v: String): List<Int> =
                     v.trim().removePrefix("v").removePrefix("V")
                         .split(".", "-", "_")
-                        .mapNotNull { it.toIntOrNull() }
+                        .mapNotNull { Regex("^\\d+").find(it)?.value?.toIntOrNull() }
                         .let { if (it.size >= 3) it.take(3) else it + List(3 - it.size) { 0 } }
 
                 fun isRemoteNewer(remote: String, local: String): Boolean {

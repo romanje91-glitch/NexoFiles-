@@ -132,6 +132,7 @@ class VaultRepository(private val context: Context) {
     runCatching {
       val safeName = item.originalName.replace(Regex("[/\\\\:*?\"<>|]"), "_")
       val tempOut = File(previewDir, "${item.id}_$safeName")
+      if (tempOut.exists() && tempOut.length() > 0L) return@runCatching tempOut
       decryptFileToDest(File(item.vaultFilePath), tempOut)
       require(tempOut.exists() && tempOut.length() > 0L) {
         "Archivo temporal de vista previa vacío o incompleto"
