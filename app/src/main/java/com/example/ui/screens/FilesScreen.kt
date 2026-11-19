@@ -133,9 +133,11 @@ fun FilesScreen(
   var showNewFolderDialog by remember { mutableStateOf(false) }
   var showNewFileDialog by remember { mutableStateOf(false) }
   var zipTargetPaths by remember { mutableStateOf<List<String>?>(null) }
-  androidx.activity.compose.BackHandler(enabled = uiState.currentPath.isNotBlank() && uiState.currentPath != "/storage/emulated/0") { onNavigateUp() }
+  androidx.activity.compose.BackHandler(enabled = uiState.currentPath.trimEnd('/').isNotBlank() && uiState.currentPath.trimEnd('/') != "/storage/emulated/0") { onNavigateUp() }
     var renameTarget by remember { mutableStateOf<LocalFileItem?>(null) }
   var folderFilterQuery by remember { mutableStateOf("") }
+  val isLandscapeExplorer = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+  var expandLandscapeHeader by remember { mutableStateOf(false) }
 
   Scaffold(
     containerColor = MaterialTheme.colorScheme.background,
@@ -191,13 +193,50 @@ fun FilesScreen(
         .padding(innerPadding)
         .padding(horizontal = 16.dp),
     ) {
-      Spacer(modifier = Modifier.height(10.dp))
+      if (isLandscapeExplorer) {
+        Row(
+          modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            if (uiState.currentPath.trimEnd('/') != "/storage/emulated/0") {
+              TextButton(onClick = onNavigateUp, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                Text("←", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+              }
+            }
+            Text(
+              text = uiState.currentPath.substringAfterLast('/').ifBlank { "Almacenamiento" },
+              style = MaterialTheme.typography.labelLarge,
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1
+            )
+          }
+          TextButton(
+            onClick = { expandLandscapeHeader = !expandLandscapeHeader },
+            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+          ) {
+            Text(
+              text = if (expandLandscapeHeader) "▲ Ocultar barra" else "▼ Buscar / Ordenar",
+              style = MaterialTheme.typography.labelSmall,
+              color = MaterialTheme.colorScheme.secondary
+            )
+          }
+        }
+      }
 
-      NexoComicViewerHost()
-            NexoWebBrowserHost()
-            NexoExplorerTabBar(currentPath = uiState.currentPath, onNavigatePath = onNavigateToPath)
-            // Top Breadcrumb HUD bar + Layout & Hidden toggles
-      Row(
+      if (!isLandscapeExplorer || expandLandscapeHeader) {
+Spacer(modifier = Modifier.height(10.dp))
+
+NexoComicViewerHost()
+
+NexoWebBrowserHost()
+
+NexoExplorerTabBar(currentPath = uiState.currentPath, onNavigatePath = onNavigateToPath)
+
+// Top Breadcrumb HUD bar + Layout & Hidden toggles
+
+Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -255,8 +294,9 @@ fun FilesScreen(
         }
       }
 
-      // Volume chips when more than one volume exists
-      if (uiState.availableVolumes.size > 1) {
+// Volume chips when more than one volume exists
+
+if (uiState.availableVolumes.size > 1) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(
           modifier = Modifier
@@ -288,10 +328,11 @@ fun FilesScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+Spacer(modifier = Modifier.height(10.dp))
 
-      // Chamfered Tactical Search / Filter bar
-      Surface(
+// Chamfered Tactical Search / Filter bar
+
+Surface(
         modifier = Modifier
           .fillMaxWidth()
           .height(46.dp),
@@ -356,10 +397,11 @@ fun FilesScreen(
         }
       }
 
-      Spacer(modifier = Modifier.height(10.dp))
+Spacer(modifier = Modifier.height(10.dp))
 
-      // Angular Sort chips + Hidden indicator
-      Row(
+// Angular Sort chips + Hidden indicator
+
+Row(
         modifier = Modifier
           .fillMaxWidth()
           .horizontalScroll(rememberScrollState()),
@@ -404,7 +446,9 @@ fun FilesScreen(
         )
       }
 
-      // Clipboard banner if pending copy/move
+
+      }
+// Clipboard banner if pending copy/move
       AnimatedVisibility(visible = uiState.clipboard != null) {
         uiState.clipboard?.let { clip ->
           BichromaticCard(

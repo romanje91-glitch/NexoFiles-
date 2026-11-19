@@ -2,8 +2,10 @@ package com.example
 
 import android.app.DownloadManager
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Environment
+import android.util.LruCache
 import android.webkit.URLUtil
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
@@ -12,42 +14,42 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.example.data.model.VaultFileItem
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
-import java.security.SecureRandom
-import javax.crypto.Cipher
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.PBEKeySpec
-import javax.crypto.spec.SecretKeySpec
 
 object NexoNavBridge {
     var isMediaViewerOpen by mutableStateOf(false)
@@ -82,173 +84,176 @@ object NexoNavBridge {
 }
 
 object NexoVaultDriveMirror {
-    fun getMirrorDir(context: Context): File {
+    fun ensureMirroredBackups(context: Context, passphrase: String = "NEXO_HERMETIC_AUTO_KEY_2026"): List<File> {
         val extDir = File(context.getExternalFilesDir(null), "NexoVault_Encrypted")
         if (!extDir.exists()) extDir.mkdirs()
-        return extDir
+        return extDir.listFiles()?.filter { it.isFile && it.name.endsWith(".nexo_vault") } ?: emptyList()
     }
+}
 
-    fun ensureMirroredBackups(context: Context, passphrase: String = "nexo_default_sync"): List<File> {
-        val mirrorDir = getMirrorDir(context)
-        val candidates = listOf(
-            File(context.filesDir, "vault"),
-            File(context.filesDir, "nexo_vault"),
-            File(context.filesDir, "private_vault"),
-            File(context.getExternalFilesDir(null), "vault"),
-            context.filesDir
-        )
-        for (vd in candidates) {
-            if (vd.exists() && vd.isDirectory) {
-                vd.listFiles()?.forEach { src ->
-                    if (src.isFile && !src.name.endsWith(".meta") && !src.name.endsWith(".xml") && !src.name.endsWith(".db") && !src.name.endsWith(".txt") && src.length() > 0) {
-                        val targetName = if (src.name.endsWith(".nexo_vault")) src.name else "${src.name}.nexo_vault"
-                        val target = File(mirrorDir, targetName)
-                        if (!target.exists()) {
-                            runCatching { encryptFileToMirror(src, target, passphrase) }
-                        }
-                    }
-                }
+data class NexoCloudPlaceholderItem(
+    val id: String,
+    val originalName: String,
+    val folderName: String = "",
+    val addedAt: Long = System.currentTimeMillis()
+)
+
+object NexoVaultExtraStore {
+    private const val PREFS = "nexo_vault_extra_store_v140"
+    private const val KEY_FOLDERS = "vault_folders_json"
+    private const val KEY_MAP = "vault_item_folder_map_json"
+    private const val KEY_CLOUD_ONLY = "vault_cloud_only_json"
+
+    val folders = mutableStateListOf<String>()
+    val itemFolderMap = mutableStateMapOf<String, String>()
+    val cloudOnlyList = mutableStateListOf<NexoCloudPlaceholderItem>()
+    var activeFolder by mutableStateOf<String?>(null)
+    private var initialized = false
+
+    private val thumbCache = LruCache<String, ImageBitmap>(48)
+
+    fun init(context: Context) {
+        if (initialized) return
+        initialized = true
+        val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        runCatching {
+            val arr = JSONArray(sp.getString(KEY_FOLDERS, "[]") ?: "[]")
+            folders.clear()
+            for (i in 0 until arr.length()) {
+                val n = arr.optString(i)
+                if (n.isNotBlank()) folders.add(n)
             }
         }
-        return mirrorDir.listFiles()?.filter { it.isFile && it.name.endsWith(".nexo_vault") }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        runCatching {
+            val obj = JSONObject(sp.getString(KEY_MAP, "{}") ?: "{}")
+            itemFolderMap.clear()
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                itemFolderMap[k] = obj.optString(k, "")
+            }
+        }
+        runCatching {
+            val arr = JSONArray(sp.getString(KEY_CLOUD_ONLY, "[]") ?: "[]")
+            cloudOnlyList.clear()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                cloudOnlyList.add(
+                    NexoCloudPlaceholderItem(
+                        id = o.optString("id"),
+                        originalName = o.optString("name"),
+                        folderName = o.optString("folder", ""),
+                        addedAt = o.optLong("addedAt", System.currentTimeMillis())
+                    )
+                )
+            }
+        }
     }
 
-    fun encryptFileToMirror(source: File, dest: File, passphrase: String) {
-        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        val iv = ByteArray(12).also { SecureRandom().nextBytes(it) }
-        val spec = PBEKeySpec(passphrase.ifBlank { "nexo_default_sync" }.toCharArray(), salt, 10000, 256)
-        val secret = SecretKeySpec(SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(spec).encoded, "AES")
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.ENCRYPT_MODE, secret, GCMParameterSpec(128, iv))
-        val encrypted = cipher.doFinal(source.readBytes())
-        dest.outputStream().use { out ->
-            out.write("NEXOVAULT1".toByteArray())
-            out.write(salt)
-            out.write(iv)
-            out.write(encrypted)
+    private fun save(context: Context) {
+        val sp = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val fArr = JSONArray()
+        folders.forEach { fArr.put(it) }
+        val mObj = JSONObject()
+        itemFolderMap.forEach { (k, v) -> mObj.put(k, v) }
+        val cArr = JSONArray()
+        cloudOnlyList.forEach { item ->
+            cArr.put(JSONObject().apply {
+                put("id", item.id)
+                put("name", item.originalName)
+                put("folder", item.folderName)
+                put("addedAt", item.addedAt)
+            })
+        }
+        sp.edit()
+            .putString(KEY_FOLDERS, fArr.toString())
+            .putString(KEY_MAP, mObj.toString())
+            .putString(KEY_CLOUD_ONLY, cArr.toString())
+            .apply()
+    }
+
+    fun createFolder(context: Context, name: String) {
+        val clean = name.trim()
+        if (clean.isBlank() || folders.contains(clean)) return
+        folders.add(clean)
+        save(context)
+    }
+
+    fun assignToFolder(context: Context, itemId: String, folderName: String) {
+        if (folderName.isBlank()) itemFolderMap.remove(itemId) else itemFolderMap[itemId] = folderName
+        save(context)
+    }
+
+    fun addCloudOnlyPlaceholder(context: Context, item: VaultFileItem) {
+        val folder = itemFolderMap[item.id] ?: activeFolder.orEmpty()
+        cloudOnlyList.removeAll { it.originalName == item.originalName }
+        cloudOnlyList.add(
+            0,
+            NexoCloudPlaceholderItem(
+                id = item.id,
+                originalName = item.originalName,
+                folderName = folder
+            )
+        )
+        save(context)
+    }
+
+    fun removeCloudOnlyPlaceholder(context: Context, originalName: String) {
+        cloudOnlyList.removeAll { it.originalName == originalName }
+        save(context)
+    }
+
+    fun clearThumbnails() {
+        thumbCache.evictAll()
+    }
+
+    fun isImageName(name: String): Boolean {
+        val lower = name.lowercase()
+        return lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".png") ||
+            lower.endsWith(".webp") || lower.endsWith(".gif") || lower.endsWith(".bmp")
+    }
+
+    suspend fun loadThumbnail(context: Context, item: VaultFileItem): ImageBitmap? {
+        if (!isImageName(item.originalName)) return null
+        thumbCache.get(item.id)?.let { return it }
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val repo = (context.applicationContext as? NexoFilesApp)?.container?.vault
+                    ?: return@runCatching null
+                val tmp = repo.decryptToCacheAndOpen(item).getOrNull() ?: return@runCatching null
+                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(tmp.absolutePath, bounds)
+                var sample = 1
+                val maxDim = maxOf(bounds.outWidth, bounds.outHeight)
+                while (maxDim / sample > 240) sample *= 2
+                val opts = BitmapFactory.Options().apply { inSampleSize = sample }
+                val bmp = BitmapFactory.decodeFile(tmp.absolutePath, opts)
+                runCatching { tmp.delete() }
+                bmp?.asImageBitmap()?.also { thumbCache.put(item.id, it) }
+            }.getOrNull()
         }
     }
 }
 
 @Composable
-fun NexoEvaSingleLineSelector(
-    themes: List<String>,
-    selectedTheme: String,
-    accentColor: Color = Color(0xFF00FF66),
-    onSelect: (String) -> Unit
+fun NexoGlobeIcon(
+    tint: Color,
+    size: Dp = 20.dp,
+    modifier: Modifier = Modifier
 ) {
-    if (themes.isEmpty()) return
-    var dropdownExpanded by remember { mutableStateOf(false) }
-    val totalVirtual = 6000
-    val currentIdx = themes.indexOf(selectedTheme).coerceAtLeast(0)
-    val startIdx = remember { (totalVirtual / 2) - ((totalVirtual / 2) % themes.size) + currentIdx }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIdx)
-    var userScrolled by remember { mutableStateOf(false) }
-
-    LaunchedEffect(listState.isScrollInProgress) {
-        if (listState.isScrollInProgress) {
-            userScrolled = true
-        } else if (userScrolled) {
-            val chosen = themes[listState.firstVisibleItemIndex % themes.size]
-            if (chosen != selectedTheme) {
-                onSelect(chosen)
-            }
-            userScrolled = false
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF10141D))
-            .border(1.dp, accentColor.copy(alpha = 0.75f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Star,
-                contentDescription = null,
-                tint = accentColor,
-                modifier = Modifier.size(16.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            LazyRow(
-                state = listState,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(totalVirtual) { idx ->
-                    val item = themes[idx % themes.size]
-                    val isSel = item == selectedTheme
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isSel) accentColor.copy(alpha = 0.22f) else Color(0xFF161B26))
-                            .border(
-                                width = if (isSel) 1.5.dp else 0.5.dp,
-                                color = if (isSel) accentColor else Color.Gray.copy(alpha = 0.35f),
-                                shape = RoundedCornerShape(6.dp)
-                            )
-                            .clickable { onSelect(item) }
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = if (isSel) "● $item" else item,
-                            color = if (isSel) accentColor else Color.White.copy(alpha = 0.8f),
-                            fontSize = 12.sp,
-                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.width(4.dp))
-            IconButton(
-                onClick = { dropdownExpanded = true },
-                modifier = Modifier.size(34.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowDropDown,
-                    contentDescription = "Lista de temas",
-                    tint = accentColor
-                )
-            }
-        }
-
-        DropdownMenu(
-            expanded = dropdownExpanded,
-            onDismissRequest = { dropdownExpanded = false },
-            modifier = Modifier
-                .background(Color(0xFF121622))
-                .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
-        ) {
-            themes.forEach { themeName ->
-                val isSel = themeName == selectedTheme
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            text = if (isSel) "● $themeName" else themeName,
-                            color = if (isSel) accentColor else Color.White,
-                            fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal,
-                            fontSize = 13.sp
-                        )
-                    },
-                    onClick = {
-                        dropdownExpanded = false
-                        onSelect(themeName)
-                    }
-                )
-            }
-        }
+    Canvas(modifier = modifier.size(size)) {
+        val stroke = Stroke(width = size.toPx() * 0.085f)
+        val r = size.toPx() * 0.42f
+        val c = Offset(this.size.width / 2f, this.size.height / 2f)
+        drawCircle(color = tint, radius = r, center = c, style = stroke)
+        drawLine(color = tint, start = Offset(c.x - r, c.y), end = Offset(c.x + r, c.y), strokeWidth = stroke.width)
+        drawLine(color = tint, start = Offset(c.x, c.y - r), end = Offset(c.x, c.y + r), strokeWidth = stroke.width)
+        drawOval(
+            color = tint,
+            topLeft = Offset(c.x - r * 0.52f, c.y - r),
+            size = Size(r * 1.04f, r * 2f),
+            style = stroke
+        )
     }
 }
 
@@ -261,7 +266,7 @@ fun NexoSimpleWebBrowserDialog(
     var currentUrl by remember { mutableStateOf(initialUrl) }
     var immersiveWeb by remember { mutableStateOf(false) }
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
-    val accent = Color(0xFF00FF66)
+    val accent = MaterialTheme.colorScheme.primary
 
     fun loadTarget(raw: String) {
         val trimmed = raw.trim()
@@ -290,6 +295,8 @@ fun NexoSimpleWebBrowserDialog(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color(0xFF090B10))
+                .statusBarsPadding()
+                .navigationBarsPadding()
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 AnimatedVisibility(visible = !immersiveWeb) {
@@ -325,7 +332,7 @@ fun NexoSimpleWebBrowserDialog(
                                     fontSize = 12.sp,
                                     fontFamily = FontFamily.Monospace
                                 ),
-                                placeholder = { Text("URL o búsqueda...", fontSize = 11.sp, color = Color.Gray) }
+                                placeholder = { Text("Buscar o escribir URL...", fontSize = 11.sp, color = Color.Gray) }
                             )
                             IconButton(
                                 onClick = { loadTarget(urlInput) },
@@ -339,7 +346,7 @@ fun NexoSimpleWebBrowserDialog(
                                     .background(Color(0xFF1A2234))
                                     .border(1.dp, accent, RoundedCornerShape(6.dp))
                                     .clickable { immersiveWeb = true }
-                                    .padding(horizontal = 6.dp, vertical = 4.dp)
+                                    .padding(horizontal = 7.dp, vertical = 4.dp)
                             ) {
                                 Text("⛶", color = accent, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                             }
@@ -358,14 +365,14 @@ fun NexoSimpleWebBrowserDialog(
                             listOf(
                                 "Google" to "https://www.google.com",
                                 "DuckDuckGo" to "https://duckduckgo.com",
-                                "MangaDex" to "https://mangadex.org",
-                                "GitHub Release" to "https://github.com/romanje91-glitch/NexoFiles-/releases"
+                                "Manga" to "https://mangadex.org",
+                                "GitHub" to "https://github.com/romanje91-glitch/NexoFiles-/releases"
                             ).forEach { pair ->
                                 Box(
                                     modifier = Modifier
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(Color(0xFF1A2030))
-                                        .border(0.5.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                                        .border(0.5.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(6.dp))
                                         .clickable { loadTarget(pair.second) }
                                         .padding(horizontal = 8.dp, vertical = 4.dp)
                                 ) {
@@ -389,9 +396,7 @@ fun NexoSimpleWebBrowserDialog(
                             settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
-                                    if (!url.isNullOrBlank()) {
-                                        urlInput = url
-                                    }
+                                    if (!url.isNullOrBlank()) urlInput = url
                                 }
                             }
                             webChromeClient = WebChromeClient()
@@ -400,7 +405,7 @@ fun NexoSimpleWebBrowserDialog(
                                     val req = DownloadManager.Request(Uri.parse(url))
                                     val fileName = URLUtil.guessFileName(url, contentDisposition, mimetype)
                                     req.setTitle(fileName)
-                                    req.setDescription("Descargando archivo...")
+                                    req.setDescription("Descargando desde NexoFiles Web...")
                                     req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                                     req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
                                     req.addRequestHeader("User-Agent", userAgent)
@@ -408,7 +413,7 @@ fun NexoSimpleWebBrowserDialog(
                                     dm.enqueue(req)
                                     Toast.makeText(ctx, "Descargando: $fileName", Toast.LENGTH_LONG).show()
                                 }.onFailure {
-                                    Toast.makeText(ctx, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(ctx, "Error al descargar: ${it.message}", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             loadUrl(currentUrl)
@@ -424,7 +429,7 @@ fun NexoSimpleWebBrowserDialog(
                         .align(Alignment.TopEnd)
                         .padding(12.dp)
                         .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black.copy(alpha = 0.7f))
+                        .background(Color.Black.copy(alpha = 0.72f))
                         .border(1.dp, accent, RoundedCornerShape(20.dp))
                         .clickable { immersiveWeb = false }
                         .padding(horizontal = 10.dp, vertical = 6.dp)

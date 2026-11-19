@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.NexoNavBridge
+import androidx.compose.runtime.DisposableEffect
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
@@ -100,6 +102,15 @@ fun ImageViewerScreen(
   var userRotation by remember(activeFile.absolutePath) { mutableFloatStateOf(0f) }
   var loaded by remember(activeFile.absolutePath) { mutableStateOf<LoadedImageData?>(null) }
   var isLoading by remember(activeFile.absolutePath) { mutableStateOf(true) }
+  var showControls by remember { mutableStateOf(true) }
+  LaunchedEffect(showControls) { NexoNavBridge.mediaImmersiveMode = !showControls }
+  DisposableEffect(Unit) {
+    NexoNavBridge.isMediaViewerOpen = true
+    onDispose {
+      NexoNavBridge.isMediaViewerOpen = false
+      NexoNavBridge.mediaImmersiveMode = false
+    }
+  }
 
   LaunchedEffect(activeFile.absolutePath) {
     isLoading = true
@@ -114,7 +125,8 @@ fun ImageViewerScreen(
       .fillMaxSize()
       .background(MaterialTheme.colorScheme.background),
   ) {
-    Surface(
+    if (showControls) {
+Surface(
       color = MaterialTheme.colorScheme.surface,
       tonalElevation = 0.dp,
       modifier = Modifier
@@ -204,6 +216,7 @@ fun ImageViewerScreen(
         }
       }
     }
+}
 
     // Canvas area
     Box(
@@ -212,7 +225,7 @@ fun ImageViewerScreen(
         .fillMaxWidth()
         .background(MaterialTheme.colorScheme.background)
         .pointerInput(activeFile.absolutePath) {
-          detectTapGestures(
+          detectTapGestures(onTap = { showControls = !showControls }, 
             onDoubleTap = {
               if (scale > 1.1f) {
                 scale = 1f
@@ -283,7 +296,8 @@ fun ImageViewerScreen(
     }
 
     // Bottom HUD toolbar
-    Surface(
+    if (showControls) {
+Surface(
       color = MaterialTheme.colorScheme.surface,
       modifier = Modifier
         .fillMaxWidth()
@@ -346,6 +360,7 @@ fun ImageViewerScreen(
         }
       }
     }
+}
   }
 }
 

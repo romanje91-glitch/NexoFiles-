@@ -182,9 +182,9 @@ class MainExplorerViewModel(
   }
 
   fun navigateUp(): Boolean {
-    val current = _uiState.value.currentPath
-    val root = container.localFiles.rootStoragePath
-    if (current == root || current == "/") return false
+    val current = _uiState.value.currentPath.trimEnd('/')
+    val root = container.localFiles.rootStoragePath.trimEnd('/')
+    if (current.isEmpty() || current == root) return false
     val parent = File(current).parent ?: return false
     loadDirectory(parent)
     return true

@@ -92,6 +92,20 @@ fun VideoPlayerScreen(
   var isSeeking by remember { mutableStateOf(false) }
   var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var showControlsOverlay by remember { mutableStateOf(true) }
+  LaunchedEffect(showControlsOverlay, isPlaying) {
+    NexoNavBridge.mediaImmersiveMode = !showControlsOverlay
+    if (showControlsOverlay && isPlaying) {
+      delay(3500L)
+      showControlsOverlay = false
+    }
+  }
+  DisposableEffect(Unit) {
+    NexoNavBridge.isMediaViewerOpen = true
+    onDispose {
+      NexoNavBridge.isMediaViewerOpen = false
+      NexoNavBridge.mediaImmersiveMode = false
+    }
+  }
   var errorMsg by remember(filePath) { mutableStateOf<String?>(null) }
 
   val exoPlayer = remember(filePath) {
@@ -188,7 +202,8 @@ fun VideoPlayerScreen(
       .background(MaterialTheme.colorScheme.background),
   ) {
     // NERV HUD Top bar
-    Surface(
+    if (showControlsOverlay) {
+Surface(
       color = NexoTheme.semantic.modalSurface,
       border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
       modifier = Modifier.fillMaxWidth(),
@@ -239,6 +254,7 @@ fun VideoPlayerScreen(
         }
       }
     }
+}
 
     // Video viewport
     Box(
@@ -269,6 +285,8 @@ fun VideoPlayerScreen(
         AndroidView(
           factory = { ctx ->
             PlayerView(ctx).apply {
+          useController = false
+          setOnClickListener { showControlsOverlay = !showControlsOverlay }
               player = exoPlayer
               useController = false
               resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -296,7 +314,8 @@ fun VideoPlayerScreen(
     }
 
     // Custom NERV HUD Player Controls Bar
-    Surface(
+    if (showControlsOverlay) {
+Surface(
       color = NexoTheme.semantic.modalSurface,
       shape = RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp),
       border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
@@ -428,6 +447,7 @@ fun VideoPlayerScreen(
         }
       }
     }
+}
   }
 }
 

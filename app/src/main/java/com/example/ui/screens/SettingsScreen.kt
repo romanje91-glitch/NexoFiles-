@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.layout.Box
 import com.example.NexoNavBridge
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -143,9 +144,9 @@ fun SettingsScreen(
       ?: BiometricSecurityManager(context.applicationContext)
   }
   val biometricAvailability = remember(resolvedSecurity) { resolvedSecurity.checkAvailability() }
-  BackHandler(onBack = onBack)
 
-  var expandedPanel by remember { mutableStateOf("DISPLAY") }
+  var expandedPanel by remember { mutableStateOf("") }
+  BackHandler { if (expandedPanel.isNotEmpty()) expandedPanel = "" else onBack() }
   var folderPickerTarget by remember { mutableStateOf<String?>(null) }
   var showPinDialog by remember { mutableStateOf(false) }
   var showGesturesDialog by remember { mutableStateOf(false) }
@@ -351,12 +352,7 @@ fun SettingsScreen(
           shape = RoundedCornerShape(4.dp),
         ) {
           Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            androidx.compose.material3.OutlinedButton(
-                onClick = { NexoNavBridge.showWebBrowser = true },
-                modifier = androidx.compose.ui.Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                androidx.compose.material3.Text("🌐 ABRIR NAVEGADOR WEB SENCILLO")
-            }
+            
             
             Text(strings.resetDefaultAppsBtn.uppercase(), color = MaterialTheme.colorScheme.secondary, fontWeight = FontWeight.SemiBold)
             Text(strings.configuredDefaultAppsCount(defaultAppMappingsCount), style = MonoTnumStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -959,29 +955,72 @@ private fun SettingsAccordionCard(
   onToggle: () -> Unit,
   content: @Composable () -> Unit,
 ) {
-  BichromaticCard(modifier = Modifier.fillMaxWidth(), accentBorder = expanded) {
-    Column(modifier = Modifier.padding(14.dp)) {
-      Row(
+  val isVaultRow = title.contains("VAULT", ignoreCase = true) || title.contains("BÓVEDA", ignoreCase = true)
+  Column(modifier = Modifier.fillMaxWidth()) {
+    Row(
+      modifier = Modifier
+        .fillMaxWidth()
+        .clickable(onClick = onToggle)
+        .padding(horizontal = 16.dp, vertical = 14.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      Box(
+        modifier = Modifier
+          .size(38.dp)
+          .background(
+            color = if (expanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+            shape = RoundedCornerShape(10.dp),
+          ),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(
+          imageVector = icon,
+          contentDescription = null,
+          tint = if (expanded) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary,
+          modifier = Modifier.size(20.dp),
+        )
+      }
+      Spacer(modifier = Modifier.width(14.dp))
+      Column(modifier = Modifier.weight(1f)) {
+        Text(
+          text = title,
+          style = MaterialTheme.typography.titleSmall,
+          fontWeight = FontWeight.SemiBold,
+          color = MaterialTheme.colorScheme.onBackground,
+          maxLines = 1,
+        )
+        if (subtitle.isNotBlank()) {
+          Text(
+            text = if (isVaultRow && !expanded) "🔒 Master Code · $subtitle" else subtitle,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+          )
+        }
+      }
+      Text(
+        text = if (expanded) "⌄" else "›",
+        style = MaterialTheme.typography.titleLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(start = 8.dp),
+      )
+    }
+    AnimatedVisibility(visible = expanded) {
+      Column(
         modifier = Modifier
           .fillMaxWidth()
-          .clickable(onClick = onToggle),
-        verticalAlignment = Alignment.CenterVertically,
+          .padding(start = 16.dp, end = 16.dp, bottom = 14.dp)
+          .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.88f), RoundedCornerShape(12.dp))
+          .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
       ) {
-        IconContainerBadge(icon = icon, contentDescription = null, highlighted = expanded)
-        Spacer(modifier = Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-          Text(title.uppercase(), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurface)
-          Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Icon(if (expanded) NexoIcons.ExpandLess else NexoIcons.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-      }
-      AnimatedVisibility(visible = expanded) {
-        Column(modifier = Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-          HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-          content()
-        }
+        content()
       }
     }
+    HorizontalDivider(
+      modifier = Modifier.padding(start = 68.dp, end = 16.dp),
+      color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
+    )
   }
 }
 

@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.NexoNavBridge
+import com.example.NexoGlobeIcon
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -144,7 +146,17 @@ fun HomeScreen(
             maxLines = 1,
           )
         }
-        if (allSettings.showSearchBarOnHome) {
+        IconButton(
+              onClick = { NexoNavBridge.showWebBrowser = true },
+              modifier = Modifier
+                .padding(end = 4.dp)
+                .size(40.dp)
+                .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(8.dp))
+                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(8.dp)),
+            ) {
+              NexoGlobeIcon(tint = MaterialTheme.colorScheme.primary, size = 20.dp)
+            }
+            if (allSettings.showSearchBarOnHome) {
           IconButton(
             onClick = {
               if (uiState.searchQuery.isNotEmpty()) {

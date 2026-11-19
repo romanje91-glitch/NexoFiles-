@@ -352,7 +352,6 @@ private fun NexoFilesRoot(
   val audioState by audioPlayer.state.collectAsStateWithLifecycle()
 
   BackHandler(enabled = drawerState.isOpen) {
- if (NexoNavBridge.triggerBack()) return@BackHandler
 
     coroutineScope.launch { drawerState.close() }
   }
@@ -596,7 +595,10 @@ private fun NexoFilesRoot(
   }
 
   CompositionLocalProvider(LocalStrings provides strings) {
-    ModalNavigationDrawer(
+    if (NexoNavBridge.showWebBrowser) {
+    NexoSimpleWebBrowserDialog(onDismiss = { NexoNavBridge.showWebBrowser = false })
+  }
+  ModalNavigationDrawer(
       drawerState = drawerState,
       gesturesEnabled = showPrimaryNav || drawerState.isOpen,
       drawerContent = {
@@ -774,10 +776,12 @@ private fun NexoFilesRoot(
             ) {
               composable(NexoRoutes.HOME) {
                 val activeTabId = bottomTabs.getOrNull(pagerState.currentPage)?.id ?: "HOME"
-                BackHandler(enabled = (activeTabId != "HOME" || explorerState.currentPath != "/storage/emulated/0") && !drawerState.isOpen) {
+                BackHandler(enabled = (activeTabId != "HOME" || explorerState.currentPath.trimEnd('/') != "/storage/emulated/0") && !drawerState.isOpen) {
+                    val inSubfolder = explorerState.currentPath.trimEnd('/') != "/storage/emulated/0"
                     when {
-                        explorerState.currentPath != "/storage/emulated/0" && explorerVm.navigateUp() -> Unit
+                        activeTabId == "FILES" && inSubfolder -> explorerVm.navigateUp()
                         activeTabId == "DRIVE" && driveState.isAuthorized && toolsVm.navigateDriveUp() -> Unit
+                        inSubfolder && explorerVm.navigateUp() -> Unit
                         else -> {
                             val homeIndex = bottomTabs.indexOfFirst { it.id == "HOME" }.coerceAtLeast(0)
                             coroutineScope.launch {
@@ -792,6 +796,7 @@ private fun NexoFilesRoot(
 
                 HorizontalPager(
                   state = pagerState,
+                  userScrollEnabled = !(activeTabId == "FILES" && explorerState.currentPath.trimEnd('/') != "/storage/emulated/0"),
                   modifier = Modifier.fillMaxSize(),
                   beyondViewportPageCount = 1,
                 ) { page ->

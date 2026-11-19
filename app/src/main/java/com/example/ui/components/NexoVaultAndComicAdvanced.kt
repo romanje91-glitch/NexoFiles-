@@ -1,5 +1,7 @@
 package com.example.ui.components
 
+import android.os.Handler
+import android.os.Looper
 import android.app.Activity
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -674,45 +676,125 @@ object NexoOtaUpdater {
     }
 
     fun downloadAndInstallUpdate(context: Context, customUrl: String? = null, onStatus: (String) -> Unit) {
-        val targetUrl = (customUrl ?: getApkUrl(context)).trim()
-        try {
-            val outFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "NexoFiles_update.apk")
-            if (outFile.exists()) outFile.delete()
+        onStatus("Consultando la última versión en GitHub...")
+        val mainHandler = Handler(Looper.getMainLooper())
+        Thread {
+            try {
+                val installedVer = try {
+                    context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.4.0"
+                } catch (_: Throwable) { "1.4.0" }
 
-            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-            val req = DownloadManager.Request(Uri.parse(targetUrl))
-                .setTitle("NexoFiles OTA Update v$CURRENT_VERSION_NAME")
-                .setDescription("Descargando actualización automática...")
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationUri(Uri.fromFile(outFile))
-                .setAllowedOverMetered(true)
-                .setAllowedOverRoaming(true)
+                fun parseVer(v: String): List<Int> =
+                    v.trim().removePrefix("v").removePrefix("V")
+                        .split(".", "-", "_")
+                        .mapNotNull { it.toIntOrNull() }
+                        .let { if (it.size >= 3) it.take(3) else it + List(3 - it.size) { 0 } }
 
-            val downloadId = dm.enqueue(req)
-            onStatus("Descargando actualización OTA desde el servidor...")
+                fun isRemoteNewer(remote: String, local: String): Boolean {
+                    val r = parseVer(remote)
+                    val l = parseVer(local)
+                    for (i in 0..2) {
+                        if (r[i] != l[i]) return r[i] > l[i]
+                    }
+                    return false
+                }
 
-            val receiver = object : BroadcastReceiver() {
-                override fun onReceive(ctx: Context?, intent: Intent?) {
-                    val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
-                    if (id == downloadId) {
-                        try { context.unregisterReceiver(this) } catch (_: Throwable) {}
-                        if (outFile.exists() && outFile.length() > 100_000L) {
-                            onStatus("Descarga completa. Abriendo instalador de Android...")
-                            installApk(context, outFile)
-                        } else {
-                            onStatus("Servidor OTA listo (v$CURRENT_VERSION_NAME instalada). Configura tu URL de release para publicar v1.2.0.")
+                val endpoints = listOf(
+                    "https://api.github.com/repos/romanje91-glitch/NexoFiles-/releases/latest",
+                    "https://api.github.com/repos/romanje91-glitch/NexoFiles/releases/latest"
+                )
+                var latestTag = ""
+                var apkUrl = ""
+                for (ep in endpoints) {
+                    runCatching {
+                        val conn = (URL(ep).openConnection() as HttpURLConnection).apply {
+                            requestMethod = "GET"
+                            connectTimeout = 8000
+                            readTimeout = 8000
+                            setRequestProperty("Accept", "application/vnd.github+json")
+                            setRequestProperty("User-Agent", "NexoFiles-OTA")
                         }
+                        if (conn.responseCode == 200) {
+                            val body = conn.inputStream.bufferedReader().use { it.readText() }
+                            val json = JSONObject(body)
+                            val tag = json.optString("tag_name", "")
+                            val assets = json.optJSONArray("assets")
+                            var foundUrl = ""
+                            if (assets != null) {
+                                for (i in 0 until assets.length()) {
+                                    val a = assets.getJSONObject(i)
+                                    val u = a.optString("browser_download_url", "")
+                                    if (u.endsWith(".apk", ignoreCase = true)) {
+                                        foundUrl = u
+                                        break
+                                    }
+                                }
+                            }
+                            if (tag.isNotBlank() && foundUrl.isNotBlank()) {
+                                latestTag = tag
+                                apkUrl = foundUrl
+                            }
+                        }
+                        conn.disconnect()
+                    }
+                    if (latestTag.isNotBlank()) break
+                }
+
+                if (latestTag.isBlank() || apkUrl.isBlank()) {
+                    mainHandler.post { onStatus("No se pudo verificar el servidor OTA. Intenta de nuevo.") }
+                    return@Thread
+                }
+
+                if (!isRemoteNewer(latestTag, installedVer)) {
+                    mainHandler.post {
+                        onStatus("✓ Ya estás en la versión más reciente (v$installedVer). No es necesario descargar.")
+                    }
+                    return@Thread
+                }
+
+                mainHandler.post {
+                    try {
+                        val outDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: context.cacheDir
+                        val outFile = File(outDir, "NexoFiles_${latestTag}.apk")
+                        if (outFile.exists()) outFile.delete()
+
+                        val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+                        val req = DownloadManager.Request(Uri.parse(apkUrl))
+                            .setTitle("NexoFiles $latestTag")
+                            .setDescription("Actualizando directamente a la versión más reciente ($latestTag)")
+                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                            .setDestinationUri(Uri.fromFile(outFile))
+
+                        val downloadId = dm.enqueue(req)
+                        onStatus("Nueva versión $latestTag detectada (actual: v$installedVer). Descargando...")
+
+                        val receiver = object : BroadcastReceiver() {
+                            override fun onReceive(ctx: Context?, intent: Intent?) {
+                                val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+                                if (id == downloadId) {
+                                    try { context.unregisterReceiver(this) } catch (_: Throwable) {}
+                                    if (outFile.exists() && outFile.length() > 100_000L) {
+                                        onStatus("Descarga completa ($latestTag). Abriendo instalador de Android...")
+                                        installApk(context, outFile)
+                                    } else {
+                                        onStatus("Error al verificar el paquete $latestTag descargado.")
+                                    }
+                                }
+                            }
+                        }
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED)
+                        } else {
+                            context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
+                        }
+                    } catch (e: Throwable) {
+                        onStatus("Error iniciando descarga OTA: ${e.localizedMessage}")
                     }
                 }
+            } catch (e: Throwable) {
+                mainHandler.post { onStatus("Error verificando OTA: ${e.localizedMessage}") }
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), Context.RECEIVER_EXPORTED)
-            } else {
-                context.registerReceiver(receiver, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE))
-            }
-        } catch (e: Throwable) {
-            onStatus("Error iniciando OTA: ${e.localizedMessage}")
-        }
+        }.start()
     }
 
     fun installApk(context: Context, apkFile: File) {
@@ -834,7 +916,7 @@ fun NexoSecureVaultSummaryPanel(
                 ) {
                     Column(modifier = Modifier.padding(8.dp)) {
                         Text("GOOGLE DRIVE (OCULTO)", color = themeColor, fontSize = 10.sp)
-                        val totalCloud = maxOf(cloudCount, localCount, NexoSecureVaultManager.cloudOnlyItems.size)
+                        val totalCloud = maxOf(cloudCount, com.example.NexoVaultExtraStore.cloudOnlyList.size)
                         Text("$totalCloud respaldos", color = themeColor, fontWeight = FontWeight.Bold, fontSize = 11.sp)
                     }
                 }

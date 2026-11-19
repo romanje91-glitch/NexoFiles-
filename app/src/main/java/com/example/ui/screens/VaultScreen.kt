@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import com.example.NexoVaultExtraStore
+import com.example.NexoCloudPlaceholderItem
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.runtime.produceState
 import com.example.NexoVaultDriveMirror
 import com.example.NexoNavBridge
 import com.example.ui.components.*
@@ -126,7 +133,7 @@ fun VaultScreen(
   onBack: () -> Unit,
 ) {
   BackHandler {
-    onLockVault()
+    run { NexoVaultExtraStore.clearThumbnails(); onLockVault() }
     onBack()
   }
 
@@ -144,7 +151,12 @@ fun VaultScreen(
   var secretInput by remember(activeLockMethod) { mutableStateOf("") }
   val patternNodes = remember(activeLockMethod) { mutableStateListOf<Int>() }
 
+  LaunchedEffect(Unit) { NexoVaultExtraStore.init(context) }
   var showDriveBackupModal by remember { mutableStateOf(false) }
+  var showNewVaultFolderDialog by remember { mutableStateOf(false) }
+  var newVaultFolderName by remember { mutableStateOf("") }
+  var pendingCloudDownloadItem by remember { mutableStateOf<NexoCloudPlaceholderItem?>(null) }
+  var pendingDeleteChoiceItem by remember { mutableStateOf<VaultFileItem?>(null) }
     var pendingSelectiveDeleteItem by remember { mutableStateOf<VaultFileItem?>(null) }
   var showPortalModal by remember { mutableStateOf(false) }
   var selectedVaultIds by remember(state.items) { mutableStateOf(setOf<String>()) }
@@ -215,7 +227,7 @@ fun VaultScreen(
     ) {
       IconButton(
         onClick = {
-          onLockVault()
+          run { NexoVaultExtraStore.clearThumbnails(); onLockVault() }
           onBack()
         },
         modifier = Modifier.testTag("vault_back_button"),
@@ -622,7 +634,83 @@ fun VaultScreen(
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           item { NexoSecureVaultSummaryPanel(localCount = state.items.size, localBytes = state.items.sumOf { it.sizeBytes }, cloudCount = state.driveBackups.size, onOpenDriveBackupModal = { showDriveBackupModal = true }) }
-                items(state.items, key = { it.id }) { item ->
+                
+      item(key = "vault_folders_bar") {
+        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Text(
+              text = if (NexoVaultExtraStore.activeFolder != null) "📁 CARPETA: ${NexoVaultExtraStore.activeFolder}" else "CARPETAS SEGURAS (${NexoVaultExtraStore.folders.size})",
+              style = MaterialTheme.typography.labelMedium,
+              color = MaterialTheme.colorScheme.primary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+              if (NexoVaultExtraStore.activeFolder != null) {
+                OutlinedButton(
+                  onClick = { NexoVaultExtraStore.activeFolder = null },
+                  contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                ) { Text("← TODAS", style = MaterialTheme.typography.labelSmall) }
+              }
+              OutlinedButton(
+                onClick = { showNewVaultFolderDialog = true },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+              ) { Text("+ CARPETA", style = MaterialTheme.typography.labelSmall) }
+            }
+          }
+          if (NexoVaultExtraStore.folders.isNotEmpty() && NexoVaultExtraStore.activeFolder == null) {
+            Row(
+              modifier = Modifier.fillMaxWidth(),
+              horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+              NexoVaultExtraStore.folders.take(4).forEach { folderName ->
+                Surface(
+                  shape = RoundedCornerShape(8.dp),
+                  color = MaterialTheme.colorScheme.surface,
+                  border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                  modifier = Modifier.clickable { NexoVaultExtraStore.activeFolder = folderName }
+                ) {
+                  Text(
+                    text = "🔒 $folderName",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                  )
+                }
+              }
+            }
+          }
+        }
+      }
+      items(
+        NexoVaultExtraStore.cloudOnlyList.filter {
+          NexoVaultExtraStore.activeFolder == null || it.folderName == NexoVaultExtraStore.activeFolder
+        },
+        key = { "cloud_${it.id}_${it.originalName}" }
+      ) { cloudItem ->
+        Surface(
+          shape = RoundedCornerShape(10.dp),
+          color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.6f)),
+          modifier = Modifier.fillMaxWidth().clickable { pendingCloudDownloadItem = cloudItem }
+        ) {
+          Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+          ) {
+            Column(modifier = Modifier.weight(1f)) {
+              Text(cloudItem.originalName, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
+              Text("☁️ SOLO EN LA NUBE (0 B local) · Toca para descargar", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+            }
+            Text("⬇", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium)
+          }
+        }
+      }
+
+      items(state.items.filter { NexoVaultExtraStore.activeFolder == null || NexoVaultExtraStore.itemFolderMap[it.id] == NexoVaultExtraStore.activeFolder }, key = { it.id }) { item ->
             val isOpeningThis = state.openingItemId == item.id
             val isChecked = item.id in selectedVaultIds
             BichromaticCard(
@@ -653,7 +741,19 @@ fun VaultScreen(
                     CircularProgressIndicator(modifier = Modifier.size(22.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 2.dp)
                   }
                 } else {
-                  IconContainerBadge(icon = Icons.Rounded.Lock, contentDescription = null, highlighted = true)
+                  val itemThumb by produceState<ImageBitmap?>(initialValue = null, key1 = item.id) {
+            value = NexoVaultExtraStore.loadThumbnail(context, item)
+          }
+          if (itemThumb != null) {
+            Image(
+              bitmap = itemThumb!!,
+              contentDescription = item.originalName,
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.size(46.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+            )
+          } else {
+            IconContainerBadge(icon = Icons.Rounded.Lock, contentDescription = null, highlighted = true)
+          }
                 }
                 Spacer(modifier = Modifier.width(10.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -744,6 +844,85 @@ fun VaultScreen(
       onDismiss = { showPortalModal = false },
     )
   }
+
+  if (showNewVaultFolderDialog) {
+    AlertDialog(
+      onDismissRequest = { showNewVaultFolderDialog = false },
+      title = { Text("Nueva carpeta segura en Bóveda") },
+      text = {
+        OutlinedTextField(
+          value = newVaultFolderName,
+          onValueChange = { newVaultFolderName = it },
+          label = { Text("Nombre de la carpeta") },
+          singleLine = true,
+          modifier = Modifier.fillMaxWidth()
+        )
+      },
+      confirmButton = {
+        Button(onClick = {
+          NexoVaultExtraStore.createFolder(context, newVaultFolderName)
+          newVaultFolderName = ""
+          showNewVaultFolderDialog = false
+        }) { Text("Crear") }
+      },
+      dismissButton = {
+        TextButton(onClick = { showNewVaultFolderDialog = false }) { Text("Cancelar") }
+      }
+    )
+  }
+
+  pendingDeleteChoiceItem?.let { targetItem ->
+    AlertDialog(
+      onDismissRequest = { pendingDeleteChoiceItem = null },
+      title = { Text("Eliminar archivo de la Bóveda") },
+      text = { Text("¿Deseas eliminar «${targetItem.originalName}» solo del teléfono (quedará visible sin datos locales para descargarlo de la nube al abrirlo) o eliminarlo por completo?") },
+      confirmButton = {
+        Button(onClick = {
+          NexoVaultExtraStore.addCloudOnlyPlaceholder(context, targetItem)
+          onDeleteVaultItem(targetItem)
+          pendingDeleteChoiceItem = null
+        }) { Text("Solo teléfono (☁️)") }
+      },
+      dismissButton = {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+          TextButton(onClick = {
+            onDeleteVaultItem(targetItem)
+            pendingDeleteChoiceItem = null
+          }) { Text("Eliminar todo") }
+          TextButton(onClick = { pendingDeleteChoiceItem = null }) { Text("Cancelar") }
+        }
+      }
+    )
+  }
+
+  pendingCloudDownloadItem?.let { cloudItem ->
+    AlertDialog(
+      onDismissRequest = { pendingCloudDownloadItem = null },
+      title = { Text("Archivo almacenado en la nube") },
+      text = { Text("«${cloudItem.originalName}» fue eliminado localmente para ahorrar espacio. ¿Deseas descargarlo y descifrarlo desde Google Drive ahora?") },
+      confirmButton = {
+        Button(onClick = {
+          val match = state.driveBackups.firstOrNull {
+            it.originalName.equals(cloudItem.originalName, ignoreCase = true) ||
+            it.driveFile.name.startsWith(cloudItem.originalName, ignoreCase = true)
+          }
+          if (match != null) {
+            onRestoreDriveBackup(match, "NEXO_HERMETIC_AUTO_KEY_2026")
+            NexoVaultExtraStore.removeCloudOnlyPlaceholder(context, cloudItem.originalName)
+          } else {
+            onRefreshDriveBackups()
+            showDriveBackupModal = true
+            Toast.makeText(context, "Actualizando respaldos en Google Drive...", Toast.LENGTH_SHORT).show()
+          }
+          pendingCloudDownloadItem = null
+        }) { Text("Descargar de la nube") }
+      },
+      dismissButton = {
+        TextButton(onClick = { pendingCloudDownloadItem = null }) { Text("Cancelar") }
+      }
+    )
+  }
+
 }
 
 @Composable
@@ -759,7 +938,7 @@ private fun VaultDriveBackupModal(
   onDismiss: () -> Unit,
 ) {
   val strings = LocalStrings.current
-  var passphrase by remember { mutableStateOf("") }
+  var passphrase by remember { mutableStateOf("NEXO_HERMETIC_AUTO_KEY_2026") }
   var checkedVaultIds by remember(state.items, initialSelectedVaultIds) {
     mutableStateOf(
       initialSelectedVaultIds.ifEmpty { state.items.map { it.id }.toSet() },
@@ -1032,7 +1211,7 @@ private fun VaultEphemeralPortalModal(
 ) {
   val context = LocalContext.current
   val strings = LocalStrings.current
-  var passphrase by remember { mutableStateOf("") }
+  var passphrase by remember { mutableStateOf("NEXO_HERMETIC_AUTO_KEY_2026") }
   var selectedTtlMinutes by remember { mutableIntStateOf(15) }
   var remainingSeconds by remember(portalState.expiresAtMs, portalState.isRunning) { mutableLongStateOf(0L) }
 

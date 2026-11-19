@@ -1267,18 +1267,15 @@ class ToolsAndNetworkViewModel(
         .onFailure { err ->
           _vaultState.value = _vaultState.value.copy(
             isDriveBusy = false,
-            driveStatusMessage = "Error Drive: ${err.localizedMessage}",
+            driveStatusMessage = if ((err.localizedMessage ?: "").contains("401") || (err.localizedMessage ?: "").contains("UNAUTHENTICATED")) "Sesión de Google Drive expirada. Abre Google Drive y toca Reconectar." else "Error Drive: ${err.localizedMessage}",
           )
         }
     }
   }
 
   val effectivePassphrase = "NEXO_HERMETIC_AUTO_KEY_2026"
-    fun backupVaultToDrive(passphrase: String, selectedIds: Set<String> = emptySet()) {
-    if (passphrase.length < 4) {
-      emitMessage("La contraseña de respaldo debe tener al menos 4 caracteres")
-      return
-    }
+  fun backupVaultToDrive(rawPassphrase: String, selectedIds: Set<String> = emptySet()) {
+    val passphrase = rawPassphrase.trim().ifBlank { effectivePassphrase }
     viewModelScope.launch {
       val token = ensureValidDriveToken() ?: run {
         emitMessage("Conecta tu cuenta de Google Drive primero")

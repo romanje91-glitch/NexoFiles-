@@ -1,5 +1,6 @@
 package com.example.ui.components
 
+import com.example.ui.components.NexoEvaThemeSelectorCard
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -738,7 +739,9 @@ fun QuickSettingsSheet(
         )
       }
 
-      Row(
+      NexoEvaThemeSelectorCard(compact = true)
+Spacer(modifier = Modifier.height(6.dp))
+Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
       ) {
