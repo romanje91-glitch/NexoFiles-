@@ -1,5 +1,6 @@
 package com.example.data.repo
 
+import com.example.NexoVaultExtraStore
 import android.app.Activity
 import android.app.PendingIntent
 import android.content.Context
@@ -246,11 +247,81 @@ class GoogleDriveRepository(
     }
   }
 
+  suspend fun ensureVaultSubfolder(accessToken: String, subfolderName: String): Result<String> = withContext(Dispatchers.IO) {
+    runCatching {
+      val rootId = ensureVaultBackupFolder(accessToken).getOrThrow()
+      val clean = subfolderName.trim()
+      if (clean.isBlank()) return@runCatching rootId
+      val safe = clean.replace("'", "\\'")
+      val query = URLEncoder.encode(
+        "name = '$safe' and mimeType = 'application/vnd.google-apps.folder' and '$rootId' in parents and trashed = false",
+        "UTF-8",
+      )
+      val fields = URLEncoder.encode("files(id,name)", "UTF-8")
+      val req = Request.Builder()
+        .url("https://www.googleapis.com/drive/v3/files?q=$query&fields=$fields&pageSize=5")
+        .header("Authorization", "Bearer $accessToken")
+        .build()
+      val existingId = client.newCall(req).execute().use { resp ->
+        val body = resp.body?.string().orEmpty()
+        if (!resp.isSuccessful) throw IllegalStateException("Google Drive API (${resp.code}): $body")
+        val arr = JSONObject(body).optJSONArray("files")
+        if (arr != null && arr.length() > 0) arr.getJSONObject(0).getString("id") else null
+      }
+      existingId ?: createFolder(accessToken, clean, rootId).getOrThrow().id
+    }
+  }
+
+  suspend fun moveDriveFileToFolder(accessToken: String, fileId: String, newParentId: String): Result<Unit> = withContext(Dispatchers.IO) {
+    runCatching {
+      val getReq = Request.Builder()
+        .url("https://www.googleapis.com/drive/v3/files/$fileId?fields=parents")
+        .header("Authorization", "Bearer $accessToken")
+        .build()
+      val prevParents = client.newCall(getReq).execute().use { resp ->
+        val body = resp.body?.string().orEmpty()
+        if (!resp.isSuccessful) throw IllegalStateException("Google Drive API (${resp.code}): $body")
+        val arr = JSONObject(body).optJSONArray("parents")
+        val list = mutableListOf<String>()
+        if (arr != null) for (i in 0 until arr.length()) list.add(arr.getString(i))
+        list
+      }
+      if (prevParents.contains(newParentId)) return@runCatching
+      val removeParam = if (prevParents.isNotEmpty()) "&removeParents=${URLEncoder.encode(prevParents.joinToString(","), "UTF-8")}" else ""
+      val patchReq = Request.Builder()
+        .url("https://www.googleapis.com/drive/v3/files/$fileId?addParents=${URLEncoder.encode(newParentId, "UTF-8")}$removeParam")
+        .header("Authorization", "Bearer $accessToken")
+        .patch("{}".toRequestBody("application/json; charset=utf-8".toMediaType()))
+        .build()
+      client.newCall(patchReq).execute().use { resp ->
+        if (!resp.isSuccessful) {
+          val body = resp.body?.string().orEmpty()
+          throw IllegalStateException("Error moviendo respaldo en Drive (${resp.code}): $body")
+        }
+      }
+    }
+  }
+
   suspend fun listVaultBackups(accessToken: String): Result<List<DriveFileItem>> = withContext(Dispatchers.IO) {
     runCatching {
-      val folderId = ensureVaultBackupFolder(accessToken).getOrThrow()
-      listFiles(accessToken, folderId).getOrThrow()
-        .filter { !it.isFolder && it.name.endsWith(".nexo_vault", ignoreCase = true) }
+      val rootId = ensureVaultBackupFolder(accessToken).getOrThrow()
+      val rootChildren = listFiles(accessToken, rootId).getOrThrow()
+      val collected = mutableListOf<DriveFileItem>()
+      for (child in rootChildren) {
+        if (!child.isFolder && child.name.endsWith(".nexo_vault", ignoreCase = true)) {
+          NexoVaultExtraStore.driveBackupFolderMap[child.id] = ""
+          collected.add(child)
+        } else if (child.isFolder) {
+          val subFiles = listFiles(accessToken, child.id).getOrNull().orEmpty()
+          for (sf in subFiles) {
+            if (!sf.isFolder && sf.name.endsWith(".nexo_vault", ignoreCase = true)) {
+              NexoVaultExtraStore.driveBackupFolderMap[sf.id] = child.name
+              collected.add(sf)
+            }
+          }
+        }
+      }
+      collected
     }
   }
 

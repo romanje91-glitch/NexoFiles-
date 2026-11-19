@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.NexoNavBridge
 import android.app.Activity
 import android.content.Intent
 import androidx.activity.compose.BackHandler
@@ -158,7 +159,7 @@ fun GoogleDriveScreen(
     consentLauncher.launch(IntentSenderRequest.Builder(pending.intentSender).build())
   }
 
-  BackHandler {
+  BackHandler(enabled = !NexoNavBridge.isInMainPager || NexoNavBridge.activePagerTabId == "DRIVE") {
     if (activeCloudTab == 0 && driveState.isAuthorized && onNavigateUpDrive()) {
       // Navigated up inside Drive folder tree
     } else {

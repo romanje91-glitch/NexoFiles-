@@ -132,7 +132,7 @@ fun HomeScreen(
         }
         Column(modifier = Modifier.weight(1f)) {
           Text(
-            text = strings.greetingHello.uppercase(),
+            text = strings.greetingHello,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -140,7 +140,7 @@ fun HomeScreen(
             overflow = TextOverflow.Ellipsis,
           )
           Text(
-            text = "NERV // STORAGE TELEMETRY",
+            text = "NERV",
             style = MonoTnumStyle,
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
@@ -454,6 +454,7 @@ fun HomeScreen(
         Triple(strings.toolDrive, NexoIcons.Cloud, onOpenDrive),
         Triple(strings.toolApps, NexoIcons.Android, onOpenAppManager),
         Triple(strings.toolDownloader, NexoIcons.Download, onOpenDownloader),
+        Triple("Torrents", NexoIcons.Download, { NexoNavBridge.openTorrentWithMagnet() }),
         Triple(strings.toolNotes, NexoIcons.EditNote, onOpenNoteEditor),
         Triple(strings.toolVault, Icons.Rounded.Lock, onOpenVault),
         Triple(strings.recycleBinTitle, NexoIcons.DeleteOutline, onOpenRecycleBin),

@@ -1,5 +1,20 @@
 package com.example.ui.screens
 
+import com.example.NexoGlobalClipboard
+import com.example.NexoClipMode
+import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -38,6 +53,7 @@ import com.example.ui.theme.MonoTnumStyle
 import com.example.ui.theme.NexoTheme
 import com.example.util.FormatUtils
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CategoryFilesScreen(
   category: FileCategory,
@@ -48,7 +64,9 @@ fun CategoryFilesScreen(
   onShareFile: (LocalFileItem) -> Unit,
   onMoveToTrash: (LocalFileItem) -> Unit,
 ) {
-  BackHandler(onBack = onBack)
+  val context = LocalContext.current
+  var catSelectedPaths by remember { mutableStateOf(setOf<String>()) }
+  BackHandler { if (catSelectedPaths.isNotEmpty()) catSelectedPaths = emptySet() else onBack() }
   val strings = LocalStrings.current
   val categoryTitle = strings.categoryLabel(category)
 
@@ -79,6 +97,41 @@ fun CategoryFilesScreen(
       Column(modifier = Modifier.weight(1f)) {
         Text(categoryTitle.uppercase(), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.primary)
         Text(strings.filesCount(files.size), style = MonoTnumStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+      }
+    }
+
+
+    if (catSelectedPaths.isNotEmpty()) {
+      Surface(
+        shape = RoundedCornerShape(10.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+          Text("${catSelectedPaths.size}", color = MaterialTheme.colorScheme.primary)
+          OutlinedButton(
+            onClick = {
+              NexoGlobalClipboard.stageLocal(catSelectedPaths.toList(), NexoClipMode.COPY)
+              catSelectedPaths = emptySet()
+              Toast.makeText(context, "Copiado · Ve a Archivos o Bóveda y toca PEGAR", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.weight(1f)
+          ) { Text("📋 COPIAR", maxLines = 1) }
+          OutlinedButton(
+            onClick = {
+              NexoGlobalClipboard.stageLocal(catSelectedPaths.toList(), NexoClipMode.MOVE)
+              catSelectedPaths = emptySet()
+              Toast.makeText(context, "Cortado · Ve a Archivos o Bóveda y toca PEGAR", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.weight(1f)
+          ) { Text("✂️ CORTAR", maxLines = 1) }
+          TextButton(onClick = { catSelectedPaths = emptySet() }) { Text("✖") }
+        }
       }
     }
 

@@ -1,5 +1,11 @@
 package com.example.ui.viewmodel
 
+import com.example.NexoVaultSecurityStore
+import com.example.NexoVaultExtraStore
+import com.example.NexoGlobalClipboard
+import com.example.NexoGlobalFileOps
+import com.example.NexoClipMode
+import com.example.NexoClipOrigin
 import com.example.NexoVaultDriveMirror
 import com.example.NexoNavBridge
 import android.app.Activity
@@ -1186,14 +1192,18 @@ class ToolsAndNetworkViewModel(
     viewModelScope.launch {
       _vaultState.value = _vaultState.value.copy(isBusy = true)
       container.vault.lockFromUri(uri)
-        .onSuccess {
+        .onSuccess { created ->
+          val activeFolder = NexoVaultExtraStore.activeFolder.orEmpty()
+          if (activeFolder.isNotBlank()) {
+            NexoVaultExtraStore.assignToFolder(context, created.id, activeFolder)
+          }
           val items = container.vault.listVaultItems()
           _vaultState.value = _vaultState.value.copy(items = items, isBusy = false)
-          emitMessage("Cifrado en Bóveda Privada: ${it.originalName}")
+          emitMessage("Cifrado en Bóveda Privada: ${created.originalName}")
+          backupVaultToDrive(NexoVaultSecurityStore.getBackupPassphrase(context), setOf(created.id))
         }
         .onFailure {
           _vaultState.value = _vaultState.value.copy(isBusy = false)
-                if (com.example.ui.components.NexoSecureVaultManager.autoBackupOnImport) { backupVaultToDrive("NEXO_HERMETIC_AUTO_KEY_2026") }
           emitMessage("Error cifrando: ${it.localizedMessage}")
         }
     }
@@ -1241,21 +1251,43 @@ class ToolsAndNetworkViewModel(
   }
 
   // --- Vault Encrypted Google Drive Backup (.nexo_vault) ---
+  private suspend fun resolveFreshDriveToken(): String? {
+    val cur = ensureValidDriveToken()
+    if (!cur.isNullOrBlank()) return cur
+    return when (val res = container.googleDrive.trySilentAuthorize()) {
+      is DriveAuthStepResult.Authorized -> {
+        _driveState.value = _driveState.value.copy(isAuthorized = true, accessToken = res.accessToken)
+        res.accessToken
+      }
+      else -> null
+    }
+  }
+
+  private suspend fun <T> withDriveTokenRetry(block: suspend (String) -> Result<T>): Result<T> {
+    val firstToken = resolveFreshDriveToken()
+      ?: return Result.failure(IllegalStateException("Conecta tu cuenta de Google Drive primero"))
+    val firstRes = block(firstToken)
+    if (firstRes.isFailure && (firstRes.exceptionOrNull()?.message?.contains("401") == true)) {
+      val refreshed = container.googleDrive.trySilentAuthorize()
+      if (refreshed is DriveAuthStepResult.Authorized) {
+        _driveState.value = _driveState.value.copy(isAuthorized = true, accessToken = refreshed.accessToken)
+        return block(refreshed.accessToken)
+      }
+    }
+    return firstRes
+  }
+
   fun refreshVaultDriveBackups() {
     viewModelScope.launch {
-      val token = ensureValidDriveToken() ?: run {
-        _vaultState.value = _vaultState.value.copy(
-          driveStatusMessage = "Conecta Google Drive para listar respaldos cifrados",
-        )
-        return@launch
-      }
       _vaultState.value = _vaultState.value.copy(isDriveBusy = true, driveStatusMessage = null)
-      container.googleDrive.listVaultBackups(token)
+      withDriveTokenRetry { token -> container.googleDrive.listVaultBackups(token) }
         .onSuccess { driveFiles ->
           val entries = driveFiles.map { df ->
+            val folder = NexoVaultExtraStore.driveBackupFolderMap[df.id].orEmpty()
+            val cleanBase = df.name.removeSuffix(".nexo_vault")
             VaultBackupEntry(
               driveFile = df,
-              originalName = df.name.removeSuffix(".nexo_vault"),
+              originalName = if (folder.isNotBlank()) "$folder / $cleanBase" else cleanBase,
             )
           }
           _vaultState.value = _vaultState.value.copy(
@@ -1267,76 +1299,88 @@ class ToolsAndNetworkViewModel(
         .onFailure { err ->
           _vaultState.value = _vaultState.value.copy(
             isDriveBusy = false,
-            driveStatusMessage = if ((err.localizedMessage ?: "").contains("401") || (err.localizedMessage ?: "").contains("UNAUTHENTICATED")) "Sesión de Google Drive expirada. Abre Google Drive y toca Reconectar." else "Error Drive: ${err.localizedMessage}",
+            driveStatusMessage = if ((err.localizedMessage ?: "").contains("401") || (err.localizedMessage ?: "").contains("UNAUTHENTICATED"))
+              "Sesión de Google Drive expirada. Abre Google Drive y toca Reconectar."
+            else "Error Drive: ${err.localizedMessage}",
           )
         }
     }
   }
 
-  val effectivePassphrase = "NEXO_HERMETIC_AUTO_KEY_2026"
-  fun backupVaultToDrive(rawPassphrase: String, selectedIds: Set<String> = emptySet()) {
-    val passphrase = rawPassphrase.trim().ifBlank { effectivePassphrase }
+  fun backupVaultToDrive(rawPassphrase: String = "", selectedIds: Set<String> = emptySet()) {
+    val passphrase = rawPassphrase.trim().takeIf { it.length >= 4 } ?: NexoVaultSecurityStore.getBackupPassphrase(context)
     viewModelScope.launch {
-      val token = ensureValidDriveToken() ?: run {
-        emitMessage("Conecta tu cuenta de Google Drive primero")
-        return@launch
-      }
       _vaultState.value = _vaultState.value.copy(
         isDriveBusy = true,
-        driveStatusMessage = "Cifrando archivos .nexo_vault y subiendo a Drive…",
+        driveStatusMessage = "Sincronizando respaldos cifrados .nexo_vault con Google Drive…",
       )
       val stageDir = File(context.cacheDir, "vault_drive_stage").apply {
         deleteRecursively()
         mkdirs()
       }
-      runCatching {
-        val folderId = container.googleDrive.ensureVaultBackupFolder(token).getOrThrow()
-        val exported = if (selectedIds.isEmpty()) {
-          container.vault.exportAllVaultToNxv(effectivePassphrase, stageDir).getOrThrow()
-        } else {
-          val targets = _vaultState.value.items.filter { it.id in selectedIds }
-          container.vault.exportSelectedVaultToNxv(targets, effectivePassphrase, stageDir).getOrThrow()
+      withDriveTokenRetry { token ->
+        runCatching {
+          val allVaultItems = container.vault.listVaultItems()
+          val targets = if (selectedIds.isEmpty()) allVaultItems else allVaultItems.filter { it.id in selectedIds }
+          if (targets.isEmpty()) return@runCatching 0
+          val existingRemote = container.googleDrive.listVaultBackups(token).getOrNull().orEmpty()
+          var uploaded = 0
+          for (item in targets) {
+            val folderName = NexoVaultExtraStore.itemFolderMap[item.id].orEmpty()
+            val targetFolderId = container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
+            val expectedRemoteName = "${item.originalName}.nexo_vault"
+            val matchRemote = existingRemote.firstOrNull {
+              it.name.equals(expectedRemoteName, ignoreCase = true) ||
+                it.name.removeSuffix(".nexo_vault").equals(item.originalName, ignoreCase = true)
+            }
+            if (matchRemote != null) {
+              container.googleDrive.moveDriveFileToFolder(token, matchRemote.id, targetFolderId)
+              uploaded++
+              continue
+            }
+            val singleDir = File(stageDir, item.id).apply { mkdirs() }
+            val exported = container.vault.exportSelectedVaultToNxv(listOf(item), passphrase, singleDir).getOrThrow()
+            for (nxv in exported) {
+              val res = container.googleDrive.uploadFile(token, nxv, targetFolderId)
+              if (res.isSuccess) uploaded++
+            }
+          }
+          uploaded
         }
-        var uploaded = 0
-        for (nxv in exported) {
-          val res = container.googleDrive.uploadFile(token, nxv, folderId)
-          if (res.isSuccess) uploaded++
-        }
-        uploaded
       }.onSuccess { count ->
         stageDir.deleteRecursively()
         _vaultState.value = _vaultState.value.copy(
           isDriveBusy = false,
-          driveStatusMessage = "Respaldo Drive completado ($count archivo(s) .nexo_vault)",
+          driveStatusMessage = "Respaldo Drive al día ($count archivo(s) .nexo_vault)",
         )
         refreshVaultDriveBackups()
-        emitMessage("Respaldo cifrado subido a Drive: $count archivo(s)")
+        if (count > 0) emitMessage("Bóveda sincronizada con Drive ($count archivo(s))")
       }.onFailure { err ->
         stageDir.deleteRecursively()
         _vaultState.value = _vaultState.value.copy(
           isDriveBusy = false,
           driveStatusMessage = "Error en respaldo: ${err.localizedMessage}",
         )
-        emitMessage("Error respaldando en Drive: ${err.localizedMessage}")
       }
     }
   }
 
-  fun restoreVaultBackupFromDrive(entry: VaultBackupEntry, passphrase: String) {
-    restoreSelectedVaultBackupsFromDrive(listOf(entry), passphrase)
+  fun moveVaultItemsToFolderAndSync(items: List<VaultFileItem>, targetFolder: String) {
+    if (items.isEmpty()) return
+    items.forEach { NexoVaultExtraStore.assignToFolder(context, it.id, targetFolder) }
+    val destLabel = targetFolder.ifBlank { "Raíz de Bóveda" }
+    emitMessage("Movido(s) a $destLabel · Sincronizando Drive...")
+    backupVaultToDrive(NexoVaultSecurityStore.getBackupPassphrase(context), items.map { it.id }.toSet())
   }
 
-  fun restoreSelectedVaultBackupsFromDrive(entries: List<VaultBackupEntry>, passphrase: String) {
+  fun restoreVaultBackupFromDrive(entry: VaultBackupEntry, rawPassphrase: String = "") {
+    restoreSelectedVaultBackupsFromDrive(listOf(entry), rawPassphrase)
+  }
+
+  fun restoreSelectedVaultBackupsFromDrive(entries: List<VaultBackupEntry>, rawPassphrase: String = "") {
     if (entries.isEmpty()) return
-    if (passphrase.length < 4) {
-      emitMessage("Introduce la contraseña del respaldo .nexo_vault")
-      return
-    }
+    val primaryPass = rawPassphrase.trim().takeIf { it.length >= 4 } ?: NexoVaultSecurityStore.getBackupPassphrase(context)
     viewModelScope.launch {
-      val token = ensureValidDriveToken() ?: run {
-        emitMessage("Conecta tu cuenta de Google Drive primero")
-        return@launch
-      }
       _vaultState.value = _vaultState.value.copy(
         isDriveBusy = true,
         driveStatusMessage = "Descargando y descifrando ${entries.size} archivo(s)…",
@@ -1345,16 +1389,25 @@ class ToolsAndNetworkViewModel(
         deleteRecursively()
         mkdirs()
       }
-      runCatching {
-        var restoredCount = 0
-        var lastRestoredName = ""
-        for (entry in entries) {
-          val downloaded = container.googleDrive.downloadFile(token, entry.driveFile, tmpDir).getOrThrow()
-          val item = container.vault.importNxvToVault(downloaded, if (passphrase.length < 4) "NEXO_HERMETIC_AUTO_KEY_2026" else passphrase).getOrThrow()
-          restoredCount++
-          lastRestoredName = item.originalName
+      withDriveTokenRetry { token ->
+        runCatching {
+          var restoredCount = 0
+          var lastRestoredName = ""
+          for (entry in entries) {
+            val downloaded = container.googleDrive.downloadFile(token, entry.driveFile, tmpDir).getOrThrow()
+            val item = container.vault.importNxvToVault(downloaded, primaryPass).getOrElse {
+              container.vault.importNxvToVault(downloaded, "NEXO_HERMETIC_AUTO_KEY_2026").getOrThrow()
+            }
+            val remoteFolder = NexoVaultExtraStore.driveBackupFolderMap[entry.driveFile.id].orEmpty()
+            if (remoteFolder.isNotBlank()) {
+              NexoVaultExtraStore.assignToFolder(context, item.id, remoteFolder)
+            }
+            NexoVaultExtraStore.removeCloudOnlyPlaceholder(context, item.originalName)
+            restoredCount++
+            lastRestoredName = item.originalName
+          }
+          restoredCount to lastRestoredName
         }
-        restoredCount to lastRestoredName
       }.onSuccess { (count, lastName) ->
         tmpDir.deleteRecursively()
         val items = container.vault.listVaultItems()
@@ -1371,7 +1424,97 @@ class ToolsAndNetworkViewModel(
           isDriveBusy = false,
           driveStatusMessage = "Fallo de descifrado: ${err.localizedMessage}",
         )
-        emitMessage("Contraseña incorrecta o archivo corrupto")
+        emitMessage("Error restaurando respaldo: ${err.localizedMessage}")
+      }
+    }
+  }
+
+  fun executeGlobalPasteToLocal(destDirPath: String, onRefreshLocal: () -> Unit) {
+    val snapshot = NexoGlobalClipboard.entries.toList()
+    val isMove = NexoGlobalClipboard.mode == NexoClipMode.MOVE
+    if (snapshot.isEmpty() || NexoGlobalClipboard.isBusy) return
+    NexoGlobalClipboard.isBusy = true
+    viewModelScope.launch {
+      var okCount = 0
+      withContext(Dispatchers.IO) {
+        val destDir = File(destDirPath)
+        if (!destDir.exists()) destDir.mkdirs()
+        for (entry in snapshot) {
+          if (entry.origin == NexoClipOrigin.LOCAL) {
+            val src = File(entry.pathOrId)
+            if (NexoGlobalFileOps.copyOrMoveLocal(src, destDir, isMove)) okCount++
+          } else if (entry.origin == NexoClipOrigin.VAULT && entry.vaultItem != null) {
+            val vItem = entry.vaultItem
+            val dec = container.vault.decryptToCacheAndOpen(vItem).getOrNull()
+            if (dec != null && dec.exists()) {
+              val target = NexoGlobalFileOps.uniqueDest(destDir, vItem.originalName)
+              val copied = runCatching { dec.copyTo(target, overwrite = false); true }.getOrDefault(false)
+              runCatching { dec.delete() }
+              if (copied) {
+                okCount++
+                if (isMove) runCatching { container.vault.deleteFromVault(vItem) }
+              }
+            }
+          }
+        }
+      }
+      _vaultState.value = _vaultState.value.copy(items = container.vault.listVaultItems())
+      NexoGlobalClipboard.isBusy = false
+      if (isMove && okCount > 0) NexoGlobalClipboard.clear()
+      onRefreshLocal()
+      emitMessage(if (isMove) "Movido(s): $okCount elemento(s)" else "Copiado(s): $okCount elemento(s)")
+    }
+  }
+
+  fun executeGlobalPasteToVault(onRefreshLocal: () -> Unit) {
+    val snapshot = NexoGlobalClipboard.entries.toList()
+    val isMove = NexoGlobalClipboard.mode == NexoClipMode.MOVE
+    val targetFolder = NexoVaultExtraStore.activeFolder.orEmpty()
+    if (snapshot.isEmpty() || NexoGlobalClipboard.isBusy) return
+    NexoGlobalClipboard.isBusy = true
+    viewModelScope.launch {
+      val affectedIds = mutableSetOf<String>()
+      withContext(Dispatchers.IO) {
+        for (entry in snapshot) {
+          if (entry.origin == NexoClipOrigin.LOCAL) {
+            val rootSrc = File(entry.pathOrId)
+            val filesToImport = if (rootSrc.isDirectory) rootSrc.walkTopDown().filter { it.isFile }.toList()
+              else if (rootSrc.isFile) listOf(rootSrc) else emptyList()
+            for (srcFile in filesToImport) {
+              val created = runCatching { container.vault.lockFromUri(Uri.fromFile(srcFile)) }.getOrNull()?.getOrNull()
+              if (created != null) {
+                affectedIds.add(created.id)
+                if (targetFolder.isNotBlank()) NexoVaultExtraStore.assignToFolder(context, created.id, targetFolder)
+                if (isMove) runCatching { srcFile.delete() }
+              }
+            }
+            if (isMove && rootSrc.isDirectory && affectedIds.isNotEmpty()) runCatching { rootSrc.deleteRecursively() }
+          } else if (entry.origin == NexoClipOrigin.VAULT && entry.vaultItem != null) {
+            val vItem = entry.vaultItem
+            if (isMove) {
+              NexoVaultExtraStore.assignToFolder(context, vItem.id, targetFolder)
+              affectedIds.add(vItem.id)
+            } else {
+              val srcFile = container.vault.decryptToCacheAndOpen(vItem).getOrNull()
+              if (srcFile != null && srcFile.exists()) {
+                val created = runCatching { container.vault.lockFromUri(Uri.fromFile(srcFile)) }.getOrNull()?.getOrNull()
+                runCatching { srcFile.delete() }
+                if (created != null) {
+                  affectedIds.add(created.id)
+                  if (targetFolder.isNotBlank()) NexoVaultExtraStore.assignToFolder(context, created.id, targetFolder)
+                }
+              }
+            }
+          }
+        }
+      }
+      _vaultState.value = _vaultState.value.copy(items = container.vault.listVaultItems())
+      NexoGlobalClipboard.isBusy = false
+      if (isMove && affectedIds.isNotEmpty()) NexoGlobalClipboard.clear()
+      onRefreshLocal()
+      if (affectedIds.isNotEmpty()) {
+        emitMessage(if (isMove) "Movido(s) en Bóveda: ${affectedIds.size} · Sincronizando Drive..." else "Copiado(s) en Bóveda: ${affectedIds.size} · Sincronizando Drive...")
+        backupVaultToDrive(NexoVaultSecurityStore.getBackupPassphrase(context), affectedIds)
       }
     }
   }

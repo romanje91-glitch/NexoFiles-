@@ -1,5 +1,10 @@
 package com.example.ui.screens
 
+import com.example.NexoGlobalClipboard
+import com.example.NexoClipMode
+import com.example.NexoVaultSecurityStore
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import com.example.NexoVaultExtraStore
 import com.example.NexoCloudPlaceholderItem
 import androidx.compose.foundation.Image
@@ -105,6 +110,7 @@ import com.example.ui.viewmodel.VaultUiState
 import com.example.util.FormatUtils
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun VaultScreen(
   state: VaultUiState,
@@ -132,10 +138,7 @@ fun VaultScreen(
   onStopPortal: () -> Unit = {},
   onBack: () -> Unit,
 ) {
-  BackHandler {
-    run { NexoVaultExtraStore.clearThumbnails(); onLockVault() }
-    onBack()
-  }
+
 
   val context = LocalContext.current
   val strings = LocalStrings.current
@@ -160,6 +163,19 @@ fun VaultScreen(
     var pendingSelectiveDeleteItem by remember { mutableStateOf<VaultFileItem?>(null) }
   var showPortalModal by remember { mutableStateOf(false) }
   var selectedVaultIds by remember(state.items) { mutableStateOf(setOf<String>()) }
+  var showMoveToFolderDialog by remember { mutableStateOf(false) }
+
+  BackHandler(enabled = !NexoNavBridge.isInMainPager || NexoNavBridge.activePagerTabId == "VAULT") {
+    when {
+      selectedVaultIds.isNotEmpty() -> selectedVaultIds = emptySet()
+      NexoVaultExtraStore.activeFolder != null -> NexoVaultExtraStore.activeFolder = null
+      else -> {
+        NexoVaultExtraStore.clearThumbnails()
+        onLockVault()
+        onBack()
+      }
+    }
+  }
 
   val photoPickerLauncher = rememberLauncherForActivityResult(
     contract = ActivityResultContracts.PickVisualMedia(),
@@ -684,6 +700,53 @@ fun VaultScreen(
           }
         }
       }
+      if (selectedVaultIds.isNotEmpty()) {
+        item(key = "vault_es_action_bar") {
+          Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+          ) {
+            Row(
+              modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 6.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+              OutlinedButton(
+                onClick = {
+                  val picked = state.items.filter { it.id in selectedVaultIds }
+                  NexoGlobalClipboard.stageVault(picked, NexoClipMode.COPY)
+                  selectedVaultIds = emptySet()
+                  Toast.makeText(context, "${picked.size} copiado(s) · Ve a otra carpeta o Archivos y toca PEGAR", Toast.LENGTH_SHORT).show()
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f)
+              ) { Text("📋 COPIAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+              OutlinedButton(
+                onClick = {
+                  val picked = state.items.filter { it.id in selectedVaultIds }
+                  NexoGlobalClipboard.stageVault(picked, NexoClipMode.MOVE)
+                  selectedVaultIds = emptySet()
+                  Toast.makeText(context, "${picked.size} cortado(s) · Abre carpeta o Archivos y toca PEGAR", Toast.LENGTH_SHORT).show()
+                },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f)
+              ) { Text("✂️ CORTAR", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+              OutlinedButton(
+                onClick = { showMoveToFolderDialog = true },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                modifier = Modifier.weight(1f)
+              ) { Text("📁 CARPETA", style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+              TextButton(
+                onClick = { selectedVaultIds = emptySet() },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+              ) { Text("✖", color = MaterialTheme.colorScheme.error) }
+            }
+          }
+        }
+      }
+
       items(
         NexoVaultExtraStore.cloudOnlyList.filter {
           NexoVaultExtraStore.activeFolder == null || it.folderName == NexoVaultExtraStore.activeFolder
@@ -723,6 +786,18 @@ fun VaultScreen(
               Row(
                 modifier = Modifier
                   .fillMaxWidth()
+                  .combinedClickable(
+                    onClick = {
+                      if (selectedVaultIds.isNotEmpty()) {
+                        selectedVaultIds = if (item.id in selectedVaultIds) selectedVaultIds - item.id else selectedVaultIds + item.id
+                      } else {
+                        onOpenVaultItem(item)
+                      }
+                    },
+                    onLongClick = {
+                      selectedVaultIds = if (item.id in selectedVaultIds) selectedVaultIds - item.id else selectedVaultIds + item.id
+                    },
+                  )
                   .padding(horizontal = 8.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
               ) {
@@ -845,6 +920,42 @@ fun VaultScreen(
     )
   }
 
+  if (showMoveToFolderDialog) {
+    AlertDialog(
+      onDismissRequest = { showMoveToFolderDialog = false },
+      title = { Text("Mover a carpeta segura (y Drive)") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+          val pickedItems = state.items.filter { it.id in selectedVaultIds }
+          OutlinedButton(
+            onClick = {
+              NexoNavBridge.onVaultFolderMoved?.invoke(pickedItems, "")
+                ?: pickedItems.forEach { NexoVaultExtraStore.assignToFolder(context, it.id, "") }
+              selectedVaultIds = emptySet()
+              showMoveToFolderDialog = false
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("🔒 Raíz de Bóveda (Sin carpeta)") }
+          NexoVaultExtraStore.folders.forEach { fName ->
+            OutlinedButton(
+              onClick = {
+                NexoNavBridge.onVaultFolderMoved?.invoke(pickedItems, fName)
+                  ?: pickedItems.forEach { NexoVaultExtraStore.assignToFolder(context, it.id, fName) }
+                selectedVaultIds = emptySet()
+                showMoveToFolderDialog = false
+              },
+              modifier = Modifier.fillMaxWidth()
+            ) { Text("📁 $fName") }
+          }
+          if (NexoVaultExtraStore.folders.isEmpty()) {
+            Text("Primero crea una carpeta con el botón '+ CARPETA'.")
+          }
+        }
+      },
+      confirmButton = { TextButton(onClick = { showMoveToFolderDialog = false }) { Text("Cerrar") } }
+    )
+  }
+
   if (showNewVaultFolderDialog) {
     AlertDialog(
       onDismissRequest = { showNewVaultFolderDialog = false },
@@ -938,7 +1049,8 @@ private fun VaultDriveBackupModal(
   onDismiss: () -> Unit,
 ) {
   val strings = LocalStrings.current
-  var passphrase by remember { mutableStateOf("NEXO_HERMETIC_AUTO_KEY_2026") }
+  val modalCtx = LocalContext.current
+  var passphrase by remember { mutableStateOf(NexoVaultSecurityStore.getBackupPassphrase(modalCtx)) }
   var checkedVaultIds by remember(state.items, initialSelectedVaultIds) {
     mutableStateOf(
       initialSelectedVaultIds.ifEmpty { state.items.map { it.id }.toSet() },
@@ -991,17 +1103,10 @@ private fun VaultDriveBackupModal(
             Text(strings.signInGoogleBtn.uppercase(), fontWeight = FontWeight.Bold)
           }
         } else {
-          OutlinedTextField(
-            value = passphrase,
-            onValueChange = { passphrase = it },
-            label = { Text(strings.vaultPassphraseLabel) },
-            placeholder = { Text(strings.vaultPassphrasePlaceholder) },
-            singleLine = true,
-            visualTransformation = PasswordVisualTransformation(),
-            shape = RoundedCornerShape(6.dp),
-            modifier = Modifier
-              .fillMaxWidth()
-              .testTag("vault_drive_passphrase_input"),
+          Text(
+            text = "🔑 Cifrado automático activo con tu Master PIN configurado en Ajustes.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
           )
 
           if (state.items.isNotEmpty()) {
@@ -1211,7 +1316,8 @@ private fun VaultEphemeralPortalModal(
 ) {
   val context = LocalContext.current
   val strings = LocalStrings.current
-  var passphrase by remember { mutableStateOf("NEXO_HERMETIC_AUTO_KEY_2026") }
+  val modalCtx = LocalContext.current
+  var passphrase by remember { mutableStateOf(NexoVaultSecurityStore.getBackupPassphrase(modalCtx)) }
   var selectedTtlMinutes by remember { mutableIntStateOf(15) }
   var remainingSeconds by remember(portalState.expiresAtMs, portalState.isRunning) { mutableLongStateOf(0L) }
 

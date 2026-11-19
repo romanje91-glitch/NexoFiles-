@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import com.example.NexoVaultSecurityStore
+import com.example.NexoMasterPinChangeDialog
+import com.example.NexoAuthenticatorSetupDialog
 import androidx.compose.foundation.layout.Box
 import com.example.NexoNavBridge
 import androidx.compose.foundation.horizontalScroll
@@ -149,6 +152,7 @@ fun SettingsScreen(
   BackHandler { if (expandedPanel.isNotEmpty()) expandedPanel = "" else onBack() }
   var folderPickerTarget by remember { mutableStateOf<String?>(null) }
   var showPinDialog by remember { mutableStateOf(false) }
+  var showTotpSetupDialog by remember { mutableStateOf(false) }
   var showGesturesDialog by remember { mutableStateOf(false) }
   var showLanguageModal by remember { mutableStateOf(false) }
   var showBottomBarDialog by remember { mutableStateOf(false) }
@@ -525,7 +529,15 @@ fun SettingsScreen(
         subtitle = strings.vaultActiveMethodLabel(strings.vaultMethodLabel(allSettings.vaultLockMethod)),
         icon = Icons.Rounded.Lock,
         expanded = expandedPanel == "SECURITY",
-        onToggle = { expandedPanel = if (expandedPanel == "SECURITY") "" else "SECURITY" },
+        onToggle = {
+          if (expandedPanel == "SECURITY") {
+            expandedPanel = ""
+          } else if (allSettings.masterPinHash.isNotBlank() || NexoVaultSecurityStore.hasLocalPin(context)) {
+            pendingSensitiveAction = { expandedPanel = "SECURITY" }
+          } else {
+            expandedPanel = "SECURITY"
+          }
+        },
       ) {
         Text(
           text = biometricAvailability.label,
@@ -619,6 +631,25 @@ fun SettingsScreen(
             fontWeight = FontWeight.SemiBold,
           )
         }
+        Spacer(modifier = Modifier.height(6.dp))
+        OutlinedButton(
+          onClick = { showTotpSetupDialog = true },
+          modifier = Modifier.fillMaxWidth(),
+          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+          shape = RoundedCornerShape(4.dp),
+        ) {
+          Text(
+            text = if (NexoVaultSecurityStore.isTotpVerified(context)) "✓ GOOGLE AUTHENTICATOR (2FA ACTIVO)" else "🔐 VINCULAR GOOGLE AUTHENTICATOR (RECUPERAR PIN)",
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+          )
+        }
+        Text(
+          text = "Passphrase respaldo Drive: sincronizado automáticamente con tu Master PIN.",
+          style = MaterialTheme.typography.bodySmall,
+          color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         SettingsSwitchRow(strings.storagePermTitle, if (hasAllFilesAccess) strings.fullAccessActive else strings.tapToEnableAccess, hasAllFilesAccess) { onGrantStorageAccess() }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
         SettingsSwitchRow(strings.remoteSyncTitle, strings.remoteSyncDesc, allSettings.autoSyncRemoteEdits) { onUpdateBooleanSetting("auto_sync_remote_edits", it) }
@@ -885,10 +916,19 @@ fun SettingsScreen(
   }
 
   if (showPinDialog) {
-    MasterPinSetupDialog(
-      hasExistingPin = allSettings.masterPinHash.isNotBlank(),
-      onSavePin = onSetMasterPin,
+    NexoMasterPinChangeDialog(
+      hasExistingPin = allSettings.masterPinHash.isNotBlank() || NexoVaultSecurityStore.hasLocalPin(context),
+      linkedEmail = NexoNavBridge.linkedGoogleEmail,
+      onVerifyExistingPin = onVerifyMasterPin,
+      onSaveNewPin = onSetMasterPin,
       onDismiss = { showPinDialog = false },
+    )
+  }
+
+  if (showTotpSetupDialog) {
+    NexoAuthenticatorSetupDialog(
+      accountEmail = NexoNavBridge.linkedGoogleEmail,
+      onDismiss = { showTotpSetupDialog = false },
     )
   }
 
@@ -905,7 +945,7 @@ fun SettingsScreen(
 
   pendingSensitiveAction?.let { pending ->
     MasterPinVerifyDialog(
-      onVerifyPin = onVerifyMasterPin,
+      onVerifyPin = { pin -> NexoVaultSecurityStore.verifyPin(context, pin, onVerifyMasterPin) },
       onVerified = {
         pendingSensitiveAction = null
         securityAuthNotice = null

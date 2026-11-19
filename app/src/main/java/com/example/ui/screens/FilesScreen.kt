@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import com.example.NexoGlobalClipboard
+import com.example.NexoClipMode
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.unit.sp
 import com.example.NexoNavBridge
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
@@ -129,6 +133,7 @@ fun FilesScreen(
   onLockInVault: (LocalFileItem) -> Unit,
 ) {
   val strings = LocalStrings.current
+  var showEsMoreMenu by remember { mutableStateOf(false) }
   var showCreateMenu by remember { mutableStateOf(false) }
   var showNewFolderDialog by remember { mutableStateOf(false) }
   var showNewFileDialog by remember { mutableStateOf(false) }
@@ -141,48 +146,139 @@ fun FilesScreen(
 
   Scaffold(
     containerColor = MaterialTheme.colorScheme.background,
-    floatingActionButton = {
-      Box {
-        FloatingActionButton(
-          onClick = { showCreateMenu = true },
-          containerColor = MaterialTheme.colorScheme.primary,
-          contentColor = MaterialTheme.colorScheme.onPrimary,
-          shape = RoundedCornerShape(10.dp),
-          modifier = Modifier.testTag("files_fab_add"),
+    bottomBar = {
+      val selList = uiState.selectedPaths.toList()
+      val selItems = uiState.files.filter { it.path in uiState.selectedPaths }
+      val singleItem = if (selItems.size == 1) selItems.first() else null
+      Surface(
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+          horizontalArrangement = Arrangement.SpaceEvenly,
+          verticalAlignment = Alignment.CenterVertically,
         ) {
-          Icon(Icons.Rounded.Add, contentDescription = strings.newItemCd)
-        }
-        DropdownMenu(
-          expanded = showCreateMenu,
-          onDismissRequest = { showCreateMenu = false },
-          modifier = Modifier
-            .background(NexoTheme.semantic.modalSurface)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
-        ) {
-          DropdownMenuItem(
-            text = { Text(strings.newFolderMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
-            leadingIcon = { Icon(NexoIcons.CreateNewFolder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            onClick = {
-              showCreateMenu = false
-              showNewFolderDialog = true
-            },
-          )
-          DropdownMenuItem(
-            text = { Text(strings.newFileMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
-            leadingIcon = { Icon(NexoIcons.NoteAdd, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
-            onClick = {
-              showCreateMenu = false
-              showNewFileDialog = true
-            },
-          )
-          DropdownMenuItem(
-            text = { Text(strings.importSafMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
-            leadingIcon = { Icon(NexoIcons.FileOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            onClick = {
-              showCreateMenu = false
-              onImportSaf()
-            },
-          )
+          if (selList.isEmpty()) {
+            Box {
+              TextButton(onClick = { showCreateMenu = true }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)) {
+                Text("+ NUEVO", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+              }
+              DropdownMenu(
+                expanded = showCreateMenu,
+                onDismissRequest = { showCreateMenu = false },
+                modifier = Modifier.background(NexoTheme.semantic.modalSurface).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+              ) {
+                DropdownMenuItem(
+                  text = { Text(strings.newFolderMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
+                  leadingIcon = { Icon(NexoIcons.CreateNewFolder, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                  onClick = { showCreateMenu = false; showNewFolderDialog = true },
+                )
+                DropdownMenuItem(
+                  text = { Text(strings.newFileMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
+                  leadingIcon = { Icon(NexoIcons.NoteAdd, contentDescription = null, tint = MaterialTheme.colorScheme.secondary) },
+                  onClick = { showCreateMenu = false; showNewFileDialog = true },
+                )
+                DropdownMenuItem(
+                  text = { Text(strings.importSafMenu.uppercase(), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold) },
+                  leadingIcon = { Icon(NexoIcons.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+                  onClick = { showCreateMenu = false; onImportSaf() },
+                )
+              }
+            }
+            TextButton(onClick = { onNavigateToPath(uiState.currentPath) }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)) {
+              Text("↻ REFRESCAR", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
+            TextButton(onClick = onSelectAll, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)) {
+              Text("☑ TODO", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface)
+            }
+            Box {
+              TextButton(onClick = { showEsMoreMenu = true }, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp)) {
+                Text("⋯ MÁS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+              }
+              DropdownMenu(
+                expanded = showEsMoreMenu,
+                onDismissRequest = { showEsMoreMenu = false },
+                modifier = Modifier.background(NexoTheme.semantic.modalSurface).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+              ) {
+                if (uiState.currentPath.trimEnd('/') != "/storage/emulated/0") {
+                  DropdownMenuItem(text = { Text("← Subir carpeta") }, onClick = { showEsMoreMenu = false; onNavigateUp() })
+                }
+                DropdownMenuItem(text = { Text("🌐 Navegador Web") }, onClick = { showEsMoreMenu = false; NexoNavBridge.showWebBrowser = true })
+                DropdownMenuItem(text = { Text("🧲 NexoTorrent") }, onClick = { showEsMoreMenu = false; NexoNavBridge.openTorrentWithMagnet() })
+              }
+            }
+          } else {
+            TextButton(
+              onClick = {
+                NexoGlobalClipboard.stageLocal(selList, NexoClipMode.COPY)
+                onStageClipboard(selList, ClipboardAction.COPY)
+                onClearSelection()
+              },
+              contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            ) { Text("📋 COPIAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+            TextButton(
+              onClick = {
+                NexoGlobalClipboard.stageLocal(selList, NexoClipMode.MOVE)
+                onStageClipboard(selList, ClipboardAction.MOVE)
+                onClearSelection()
+              },
+              contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            ) { Text("✂️ CORTAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+            TextButton(
+              onClick = { onMoveToRecycleBin(selList) },
+              contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            ) { Text("🗑 BORRAR", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = NexoTheme.semantic.evaRed) }
+            TextButton(
+              onClick = {
+                if (singleItem != null) renameTarget = singleItem else zipTargetPaths = selList
+              },
+              contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+            ) { Text(if (singleItem != null) "✏ NOMBRE" else "📦 ZIP", fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurface) }
+            Box {
+              TextButton(
+                onClick = { showEsMoreMenu = true },
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
+              ) { Text("⋯ MÁS", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary) }
+              DropdownMenu(
+                expanded = showEsMoreMenu,
+                onDismissRequest = { showEsMoreMenu = false },
+                modifier = Modifier.background(NexoTheme.semantic.modalSurface).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+              ) {
+                if (singleItem != null && !singleItem.isDirectory) {
+                  DropdownMenuItem(text = { Text(strings.openWith) }, onClick = { showEsMoreMenu = false; onOpenWith(singleItem) })
+                }
+                if (singleItem != null && !singleItem.isDirectory && FormatUtils.isArchive(singleItem.name)) {
+                  DropdownMenuItem(text = { Text(strings.extractHere) }, onClick = { showEsMoreMenu = false; onExtractArchive(singleItem) })
+                }
+                if (singleItem != null && !singleItem.isDirectory && FormatUtils.isImage(singleItem.name)) {
+                  DropdownMenuItem(text = { Text(strings.editInNexoPhotoEditor) }, onClick = { showEsMoreMenu = false; onOpenInPhotoEditor(singleItem) })
+                }
+                if (singleItem != null && !singleItem.isDirectory && FormatUtils.isTextEditable(singleItem.name)) {
+                  DropdownMenuItem(text = { Text(strings.editInNexoNotes) }, onClick = { showEsMoreMenu = false; onOpenInNoteEditor(singleItem) })
+                }
+                DropdownMenuItem(text = { Text("🔒 Cifrar en Bóveda (${selItems.size})") }, onClick = {
+                  showEsMoreMenu = false
+                  selItems.filterNot { it.isDirectory }.forEach { onLockInVault(it) }
+                  onClearSelection()
+                })
+                DropdownMenuItem(text = { Text("☁️ Subir a Google Drive") }, onClick = {
+                  showEsMoreMenu = false
+                  selItems.filterNot { it.isDirectory }.forEach { onUploadToDrive(it) }
+                  onClearSelection()
+                })
+                DropdownMenuItem(text = { Text("↗ Compartir") }, onClick = { showEsMoreMenu = false; onSharePaths(selList) })
+                DropdownMenuItem(text = { Text("📦 Comprimir ZIP") }, onClick = { showEsMoreMenu = false; zipTargetPaths = selList })
+                if (singleItem != null) {
+                  DropdownMenuItem(text = { Text("★ Marcador") }, onClick = { showEsMoreMenu = false; onToggleBookmark(singleItem) })
+                  DropdownMenuItem(text = { Text("ℹ Propiedades") }, onClick = { showEsMoreMenu = false; onOpenProperties(singleItem.path) })
+                }
+                DropdownMenuItem(text = { Text("⚠ Eliminar permanente", color = NexoTheme.semantic.evaRed) }, onClick = {
+                  showEsMoreMenu = false; onDeletePermanently(selList)
+                })
+              }
+            }
+          }
         }
       }
     },

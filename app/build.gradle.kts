@@ -16,8 +16,8 @@ android {
     applicationId = "com.aistudio.nexofiles.kxzqpm"
     minSdk = 24
     targetSdk = 36
-    versionCode = 5
-    versionName = "1.4.0"
+    versionCode = 6
+    versionName = "1.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
@@ -154,4 +154,10 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.3.1")
     implementation("androidx.media3:media3-ui:1.3.1")
     implementation("androidx.media3:media3-common:1.3.1")
+}
+
+dependencies {
+    implementation("org.libtorrent4j:libtorrent4j:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm64:2.1.0-39")
+    implementation("org.libtorrent4j:libtorrent4j-android-arm:2.1.0-39")
 }

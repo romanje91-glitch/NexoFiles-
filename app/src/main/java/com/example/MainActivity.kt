@@ -1,5 +1,9 @@
 package com.example
 
+import androidx.compose.runtime.SideEffect
+import com.example.NexoGlobalClipboard
+import com.example.NexoGlobalClipboardBar
+import com.example.NexoTorrentManagerDialog
 import com.example.NexoNavBridge
 import com.example.NexoSimpleWebBrowserDialog
 import android.graphics.Color as AndroidColor
@@ -322,6 +326,11 @@ private fun NexoFilesRoot(
   val navController = rememberNavController()
   val navBackStack by navController.currentBackStackEntryAsState()
   val currentRoute = navBackStack?.destination?.route ?: NexoRoutes.HOME
+  SideEffect {
+    NexoNavBridge.isInMainPager = (currentRoute == NexoRoutes.HOME || currentRoute == null)
+    NexoNavBridge.linkedGoogleEmail = driveState.accountEmail.orEmpty()
+    NexoNavBridge.onVaultFolderMoved = { items, folder -> toolsVm.moveVaultItemsToFolderAndSync(items, folder) }
+  }
   val pagerState = rememberPagerState(initialPage = 0, pageCount = { bottomTabs.size })
   val snackbarHostState = remember { SnackbarHostState() }
   val coroutineScope = rememberCoroutineScope()
@@ -598,6 +607,21 @@ private fun NexoFilesRoot(
     if (NexoNavBridge.showWebBrowser) {
     NexoSimpleWebBrowserDialog(onDismiss = { NexoNavBridge.showWebBrowser = false })
   }
+  if (NexoNavBridge.showTorrentManager) {
+    NexoTorrentManagerDialog(
+      initialMagnet = NexoNavBridge.pendingMagnetUri,
+      onOpenSaveFolder = { dirPath ->
+        explorerVm.loadDirectory(dirPath)
+        if (currentRoute != NexoRoutes.HOME) navController.popBackStack(NexoRoutes.HOME, false)
+        val fIdx = bottomTabs.indexOfFirst { it.id == "FILES" }.coerceAtLeast(0)
+        coroutineScope.launch { pagerState.animateScrollToPage(fIdx) }
+      },
+      onDismiss = {
+        NexoNavBridge.showTorrentManager = false
+        NexoNavBridge.pendingMagnetUri = ""
+      }
+    )
+  }
   ModalNavigationDrawer(
       drawerState = drawerState,
       gesturesEnabled = showPrimaryNav || drawerState.isOpen,
@@ -663,7 +687,37 @@ private fun NexoFilesRoot(
               )
             }
           },
-          bottomBar = { if (!NexoNavBridge.mediaImmersiveMode) 
+          bottomBar = {
+          if (!NexoNavBridge.mediaImmersiveMode) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+              NexoGlobalClipboardBar(
+                activeTabId = bottomTabs.getOrNull(pagerState.currentPage)?.id ?: "HOME",
+                isInMainPager = (currentRoute == NexoRoutes.HOME || currentRoute == null),
+                currentLocalPath = explorerState.currentPath,
+                isVaultUnlocked = vaultState.isUnlocked,
+                onPasteLocal = {
+                  toolsVm.executeGlobalPasteToLocal(explorerState.currentPath) {
+                    explorerVm.loadDirectory(explorerState.currentPath)
+                  }
+                },
+                onPasteVault = {
+                  toolsVm.executeGlobalPasteToVault {
+                    explorerVm.loadDirectory(explorerState.currentPath)
+                  }
+                },
+                onGoFiles = {
+                  if (currentRoute != NexoRoutes.HOME) navController.popBackStack(NexoRoutes.HOME, false)
+                  val idx = bottomTabs.indexOfFirst { it.id == "FILES" }.coerceAtLeast(0)
+                  coroutineScope.launch { pagerState.animateScrollToPage(idx) }
+                },
+                onGoVault = {
+                  if (currentRoute != NexoRoutes.HOME) navController.popBackStack(NexoRoutes.HOME, false)
+                  val idx = bottomTabs.indexOfFirst { it.id == "VAULT" }.coerceAtLeast(0)
+                  coroutineScope.launch { pagerState.animateScrollToPage(idx) }
+                },
+                onClear = { NexoGlobalClipboard.clear() }
+              )
+               if (!NexoNavBridge.mediaImmersiveMode) 
             Column(modifier = Modifier.fillMaxWidth()) {
               AudioMiniPlayerBar(
                 state = audioState,
@@ -720,7 +774,10 @@ private fun NexoFilesRoot(
                 }
               }
             }
-          },
+          
+            }
+          }
+        },
         ) { innerPadding ->
           Row(
             modifier = Modifier
@@ -776,6 +833,7 @@ private fun NexoFilesRoot(
             ) {
               composable(NexoRoutes.HOME) {
                 val activeTabId = bottomTabs.getOrNull(pagerState.currentPage)?.id ?: "HOME"
+                SideEffect { NexoNavBridge.activePagerTabId = activeTabId; NexoNavBridge.isInMainPager = true }
                 BackHandler(enabled = (activeTabId != "HOME" || explorerState.currentPath.trimEnd('/') != "/storage/emulated/0") && !drawerState.isOpen) {
                     val inSubfolder = explorerState.currentPath.trimEnd('/') != "/storage/emulated/0"
                     when {

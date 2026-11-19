@@ -1,5 +1,11 @@
 package com.example.ui.components
 
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
@@ -31,6 +37,7 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun NexoEvaThemeSelectorCard(compact: Boolean = false) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val themes = listOf(
         "EVA-00" to "Unidad 00 (Ámbar)",
         "EVA-01" to "Unidad 01 (Verde Berserk)",
@@ -50,15 +57,23 @@ fun NexoEvaThemeSelectorCard(compact: Boolean = false) {
     val currentIdx = themes.indexOfFirst { it.first == NexoEvaThemeManager.currentTheme }.coerceAtLeast(0)
     val startIdx = remember { (totalVirtual / 2) - ((totalVirtual / 2) % themes.size) + currentIdx }
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIdx)
+    val snapFling = rememberSnapFlingBehavior(lazyListState = listState)
     var userScrolled by remember { mutableStateOf(false) }
 
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
             userScrolled = true
         } else if (userScrolled) {
-            val chosen = themes[listState.firstVisibleItemIndex % themes.size]
-            if (chosen.first != NexoEvaThemeManager.currentTheme) {
-                NexoEvaThemeManager.setTheme(context, chosen.first)
+            val info = listState.layoutInfo
+            val viewportCenter = (info.viewportStartOffset + info.viewportEndOffset) / 2
+            val centered = info.visibleItemsInfo.minByOrNull { item ->
+                abs((item.offset + item.size / 2) - viewportCenter)
+            }
+            if (centered != null) {
+                val chosen = themes[centered.index % themes.size]
+                if (chosen.first != NexoEvaThemeManager.currentTheme) {
+                    NexoEvaThemeManager.setTheme(context, chosen.first)
+                }
             }
             userScrolled = false
         }
@@ -72,26 +87,33 @@ fun NexoEvaThemeSelectorCard(compact: Boolean = false) {
             .fillMaxWidth()
             .padding(horizontal = if (compact) 0.dp else 14.dp, vertical = if (compact) 2.dp else 6.dp)
     ) {
-        Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) {
             if (!compact) {
                 Text(
-                    text = "TEMA EVA (DESLIZA O ELIGE ▼)",
+                    text = "TEMA EVA (DESLIZA AL CENTRO O ELIGE ▼)",
                     color = themeColor,
                     fontWeight = FontWeight.Bold,
                     fontSize = 11.sp,
-                    modifier = Modifier.padding(bottom = 6.dp)
+                    modifier = Modifier.padding(start = 4.dp, bottom = 6.dp)
                 )
             }
-            Box(modifier = Modifier.fillMaxWidth().height(42.dp), contentAlignment = Alignment.Center) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalAlignment = Alignment.CenterVertically
+            Row(
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BoxWithConstraints(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    contentAlignment = Alignment.Center
                 ) {
+                    val chipWidth = 196.dp
+                    val sidePad = ((maxWidth - chipWidth) / 2).coerceAtLeast(0.dp)
                     LazyRow(
                         state = listState,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        flingBehavior = snapFling,
+                        contentPadding = PaddingValues(horizontal = sidePad),
+                        modifier = Modifier.fillMaxSize(),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         items(totalVirtual) { idx ->
                             val (id, label) = themes[idx % themes.size]
@@ -99,22 +121,26 @@ fun NexoEvaThemeSelectorCard(compact: Boolean = false) {
                             val paletteDot = NexoEvaThemeManager.units.firstOrNull { it.id == id }?.primary ?: themeColor
                             Surface(
                                 shape = RoundedCornerShape(8.dp),
-                                color = if (selected) themeColor.copy(alpha = 0.22f) else Color(0xFF161B26),
-                                border = BorderStroke(1.dp, if (selected) themeColor else Color(0xFF2E364F)),
-                                modifier = Modifier.clickable {
-                                    NexoEvaThemeManager.setTheme(context, id)
-                                    Toast.makeText(context, "Tema: $label", Toast.LENGTH_SHORT).show()
-                                }
+                                color = if (selected) themeColor.copy(alpha = 0.24f) else Color(0xFF161B26),
+                                border = BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) themeColor else Color(0xFF2E364F)),
+                                modifier = Modifier
+                                    .width(chipWidth)
+                                    .clickable {
+                                        NexoEvaThemeManager.setTheme(context, id)
+                                        scope.launch { listState.animateScrollToItem(idx) }
+                                        Toast.makeText(context, "Tema: $label", Toast.LENGTH_SHORT).show()
+                                    }
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    horizontalArrangement = Arrangement.Center
                                 ) {
                                     Box(modifier = Modifier.size(8.dp).clip(RoundedCornerShape(4.dp)).background(paletteDot))
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
                                         text = label,
-                                        color = if (selected) themeColor else Color.White,
+                                        color = if (selected) themeColor else Color.White.copy(alpha = 0.8f),
                                         fontSize = 12.sp,
                                         fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                                         maxLines = 1,
@@ -124,41 +150,39 @@ fun NexoEvaThemeSelectorCard(compact: Boolean = false) {
                             }
                         }
                     }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Box {
-                        IconButton(
-                            onClick = { dropdownExpanded = true },
-                            modifier = Modifier.size(34.dp)
-                        ) {
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Lista de temas", tint = themeColor)
-                        }
-                        DropdownMenu(
-                            expanded = dropdownExpanded,
-                            onDismissRequest = { dropdownExpanded = false },
-                            modifier = Modifier.background(Color(0xFF121622))
-                        ) {
-                            themes.forEach { (id, label) ->
-                                val selected = NexoEvaThemeManager.currentTheme == id
-                                val paletteDot = NexoEvaThemeManager.units.firstOrNull { it.id == id }?.primary ?: themeColor
-                                DropdownMenuItem(
-                                    text = {
-                                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(paletteDot))
-                                            Text(
-                                                text = if (selected) "✓ $label" else label,
-                                                color = if (selected) themeColor else Color.White,
-                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                                fontSize = 13.sp
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        dropdownExpanded = false
-                                        NexoEvaThemeManager.setTheme(context, id)
-                                        Toast.makeText(context, "Tema: $label", Toast.LENGTH_SHORT).show()
+                }
+                Box {
+                    IconButton(onClick = { dropdownExpanded = true }, modifier = Modifier.size(34.dp)) {
+                        Icon(Icons.Default.ArrowDropDown, contentDescription = "Lista de temas", tint = themeColor)
+                    }
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false },
+                        modifier = Modifier.background(Color(0xFF121622))
+                    ) {
+                        themes.forEachIndexed { tIdx, (id, label) ->
+                            val selected = NexoEvaThemeManager.currentTheme == id
+                            val paletteDot = NexoEvaThemeManager.units.firstOrNull { it.id == id }?.primary ?: themeColor
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(modifier = Modifier.size(10.dp).clip(RoundedCornerShape(5.dp)).background(paletteDot))
+                                        Text(
+                                            text = if (selected) "✓ $label" else label,
+                                            color = if (selected) themeColor else Color.White,
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                            fontSize = 13.sp
+                                        )
                                     }
-                                )
-                            }
+                                },
+                                onClick = {
+                                    dropdownExpanded = false
+                                    NexoEvaThemeManager.setTheme(context, id)
+                                    val base = (totalVirtual / 2) - ((totalVirtual / 2) % themes.size)
+                                    scope.launch { listState.animateScrollToItem(base + tIdx) }
+                                    Toast.makeText(context, "Tema: $label", Toast.LENGTH_SHORT).show()
+                                }
+                            )
                         }
                     }
                 }
