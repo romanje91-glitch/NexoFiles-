@@ -110,9 +110,9 @@ fun NexoXmbWaveBackground(modifier: Modifier = Modifier) {
         }
 
         // Tres ondas translúcidas muy sutiles estilo PS3 XMB
-        drawRibbon(0.36f, h * 0.032f, 2.0f, phase1, h * 0.065f, primary, 0.055f, 0.11f)
-        drawRibbon(0.42f, h * 0.042f, 1.6f, phase2 + 1.2f, h * 0.080f, secondary, 0.045f, 0.09f)
-        drawRibbon(0.48f, h * 0.026f, 2.5f, phase1 * 1.3f + 2.6f, h * 0.050f, Color.White, 0.032f, 0.07f)
+        drawRibbon(0.36f, h * 0.032f, 2.0f, phase1, h * 0.065f, primary, 0.085f, 0.16f)
+        drawRibbon(0.42f, h * 0.042f, 1.6f, phase2 + 1.2f, h * 0.080f, secondary, 0.070f, 0.13f)
+        drawRibbon(0.48f, h * 0.026f, 2.5f, phase1 * 1.3f + 2.6f, h * 0.050f, Color.White, 0.045f, 0.10f)
 
         // Partículas luminosas diminutas flotando sobre la onda
         for (p in 0 until 14) {

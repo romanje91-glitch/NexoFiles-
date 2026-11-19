@@ -146,6 +146,7 @@ fun VaultScreen(
   onBackupVaultToDrive: (String) -> Unit = {},
   onRunSmartBackup: () -> Unit = { onBackupVaultToDrive("") },
   onDismissBackupProgress: () -> Unit = {},
+  onCancelBackup: () -> Unit = {},
   onPasteVault: () -> Unit = {},
   onBackupSelectedVaultToDrive: (String, Set<String>) -> Unit = { pass, _ -> onBackupVaultToDrive(pass) },
   onRestoreDriveBackup: (VaultBackupEntry, String) -> Unit = { _, _ -> },
@@ -842,7 +843,6 @@ fun VaultScreen(
                 .fillMaxWidth()
                 .testTag("vault_item_${item.id}"),
               accentBorder = isOpeningThis || isChecked,
-              onClick = { onOpenVaultItem(item) },
             ) {
               var itemRootTopLeft by remember(item.id) { mutableStateOf(Offset.Zero) }
               Row(
@@ -1047,7 +1047,7 @@ fun VaultScreen(
       else -> "Tiempo restante: ~${state.backupEtaSeconds / 60}m ${state.backupEtaSeconds % 60}s"
     }
     AlertDialog(
-      onDismissRequest = { if (!state.isDriveBusy) onDismissBackupProgress() },
+      onDismissRequest = { onDismissBackupProgress() },
       title = {
         Row(
           modifier = Modifier.fillMaxWidth(),
@@ -1084,12 +1084,21 @@ fun VaultScreen(
         }
       },
       confirmButton = {
-        if (!state.isDriveBusy) {
+        if (state.isDriveBusy) {
+          Button(onClick = {
+            onDismissBackupProgress()
+            Toast.makeText(context, "Respaldo continúa en segundo plano (revisa la barra de notificaciones)", Toast.LENGTH_SHORT).show()
+          }) { Text("Segundo plano") }
+        } else {
           Button(onClick = onDismissBackupProgress) { Text("Listo") }
         }
       },
       dismissButton = {
-        if (!state.isDriveBusy) {
+        if (state.isDriveBusy) {
+          TextButton(onClick = onCancelBackup) {
+            Text("Cancelar", color = MaterialTheme.colorScheme.error)
+          }
+        } else {
           TextButton(onClick = {
             onDismissBackupProgress()
             showDriveBackupModal = true

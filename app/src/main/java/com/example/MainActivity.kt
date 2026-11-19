@@ -824,7 +824,6 @@ private fun NexoFilesRoot(
             }
 
             Box(modifier = Modifier.weight(1f)) {
-              NexoXmbWaveBackground(modifier = Modifier.fillMaxSize())
               NavHost(
               navController = navController,
               startDestination = NexoRoutes.HOME,
@@ -1005,6 +1004,7 @@ private fun NexoFilesRoot(
                         onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onCancelBackup = { toolsVm.cancelVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                         onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                         onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
@@ -1490,6 +1490,7 @@ private fun NexoFilesRoot(
                   onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onCancelBackup = { toolsVm.cancelVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
                   onBackupSelectedVaultToDrive = { pass, ids -> toolsVm.backupVaultToDrive(pass, ids) },
                   onRestoreDriveBackup = toolsVm::restoreVaultBackupFromDrive,
@@ -1561,6 +1562,7 @@ private fun NexoFilesRoot(
                 )
               }
             }
+              NexoXmbWaveBackground(modifier = Modifier.fillMaxSize())
             }
           }
         }

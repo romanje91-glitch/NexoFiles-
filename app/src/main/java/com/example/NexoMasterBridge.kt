@@ -250,7 +250,6 @@ object NexoVaultExtraStore {
                 while (maxDim / sample > 240) sample *= 2
                 val opts = BitmapFactory.Options().apply { inSampleSize = sample }
                 val bmp = BitmapFactory.decodeFile(tmp.absolutePath, opts)
-                runCatching { tmp.delete() }
                 bmp?.asImageBitmap()?.also { thumbCache.put(item.id, it) }
             }.getOrNull()
         }

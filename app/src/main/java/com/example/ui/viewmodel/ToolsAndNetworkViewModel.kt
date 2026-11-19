@@ -1,5 +1,11 @@
 package com.example.ui.viewmodel
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import com.example.NexoVaultSecurityStore
 import com.example.NexoVaultExtraStore
 import com.example.NexoGlobalClipboard
@@ -1320,6 +1326,54 @@ class ToolsAndNetworkViewModel(
     }
   }
 
+  private var vaultBackupJob: Job? = null
+  private val vaultBackupNotifId = 4092
+  private val vaultBackupChannelId = "nexo_vault_backup_ch"
+
+  private fun updateVaultBackupNotification(title: String, text: String, progress: Int, ongoing: Boolean) {
+    runCatching {
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager ?: return
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        val ch = NotificationChannel(vaultBackupChannelId, "Respaldo de Bóveda", NotificationManager.IMPORTANCE_LOW)
+        nm.createNotificationChannel(ch)
+      }
+      val builder = NotificationCompat.Builder(context, vaultBackupChannelId)
+        .setSmallIcon(android.R.drawable.stat_sys_upload)
+        .setContentTitle(title)
+        .setContentText(text)
+        .setOnlyAlertOnce(true)
+        .setOngoing(ongoing)
+        .setAutoCancel(!ongoing)
+      if (ongoing) {
+        builder.setProgress(100, progress.coerceIn(0, 100), progress <= 0)
+      } else {
+        builder.setSmallIcon(android.R.drawable.stat_sys_upload_done)
+        builder.setProgress(0, 0, false)
+      }
+      nm.notify(vaultBackupNotifId, builder.build())
+    }
+  }
+
+  private fun cancelVaultBackupNotification() {
+    runCatching {
+      val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+      nm?.cancel(vaultBackupNotifId)
+    }
+  }
+
+  fun cancelVaultBackup() {
+    vaultBackupJob?.cancel()
+    vaultBackupJob = null
+    cancelVaultBackupNotification()
+    _vaultState.value = _vaultState.value.copy(
+      isDriveBusy = false,
+      showBackupProgressDialog = false,
+      backupEtaSeconds = -1,
+      driveStatusMessage = "Respaldo cancelado por el usuario",
+    )
+    emitMessage("Respaldo en Drive cancelado")
+  }
+
   fun dismissVaultBackupProgress() {
     _vaultState.value = _vaultState.value.copy(showBackupProgressDialog = false)
   }
@@ -1330,7 +1384,11 @@ class ToolsAndNetworkViewModel(
     showProgressModal: Boolean = false,
   ) {
     val passphrase = rawPassphrase.trim().takeIf { it.length >= 4 } ?: NexoVaultSecurityStore.getBackupPassphrase(context)
-    viewModelScope.launch {
+    vaultBackupJob?.cancel()
+    vaultBackupJob = viewModelScope.launch {
+      if (showProgressModal) {
+        updateVaultBackupNotification("NexoFiles · Respaldo Bóveda", "Verificando archivos en Drive…", 5, true)
+      }
       _vaultState.value = _vaultState.value.copy(
         isDriveBusy = true,
         showBackupProgressDialog = showProgressModal,
@@ -1397,6 +1455,9 @@ class ToolsAndNetworkViewModel(
 
           var uploaded = 0
           for ((idx, item) in pendingUpload.withIndex()) {
+            ensureActive()
+            val curPct = (((idx.toFloat() / totalToUpload.toFloat()) * 0.92f + 0.05f) * 100f).toInt().coerceIn(5, 98)
+            updateVaultBackupNotification("Respaldo Bóveda ($curPct%)", "Subiendo ${item.originalName} (${idx + 1}/$totalToUpload)", curPct, true)
             _vaultState.value = _vaultState.value.copy(
               backupCurrentFileName = item.originalName,
               backupDoneCount = idx,
@@ -1436,10 +1497,16 @@ class ToolsAndNetworkViewModel(
           backupCurrentFileName = msg,
           driveStatusMessage = msg,
         )
+        updateVaultBackupNotification("NexoFiles · Respaldo Bóveda", msg, 100, false)
         refreshVaultDriveBackups()
         emitMessage(msg)
       }.onFailure { err ->
         stageDir.deleteRecursively()
+        if (err is CancellationException) {
+          cancelVaultBackupNotification()
+          return@launch
+        }
+        updateVaultBackupNotification("NexoFiles · Error en respaldo", err.localizedMessage ?: "Error", 0, false)
         _vaultState.value = _vaultState.value.copy(
           isDriveBusy = false,
           backupEtaSeconds = -1,
