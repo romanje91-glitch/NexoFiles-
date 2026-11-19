@@ -221,7 +221,11 @@ class GoogleDriveRepository(
               )
             }
           }
-          items
+          items.filterNot {
+            it.name.equals(VAULT_DRIVE_FOLDER_NAME, ignoreCase = true) ||
+            it.name.equals("NexoVault_Encrypted", ignoreCase = true) ||
+            it.name.endsWith(".nexo_vault", ignoreCase = true)
+          }
         }
       }
     }

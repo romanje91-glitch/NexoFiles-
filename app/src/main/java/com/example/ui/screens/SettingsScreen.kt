@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import com.example.NexoCrashLibraryDialog
 import com.example.NexoVaultSecurityStore
 import com.example.NexoMasterPinChangeDialog
 import com.example.NexoAuthenticatorSetupDialog
@@ -969,7 +970,7 @@ fun SettingsScreen(
   }
 
   if (showCrashDiagnosticsDialog) {
-    CrashDiagnosticsDialog(
+    NexoCrashLibraryDialog(
       onDismiss = { showCrashDiagnosticsDialog = false },
     )
   }

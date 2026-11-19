@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import com.example.BuildConfig
+import androidx.compose.ui.unit.sp
 import com.example.NexoNavBridge
 import com.example.NexoGlobeIcon
 import androidx.compose.animation.AnimatedVisibility
@@ -139,12 +141,23 @@ fun HomeScreen(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
-          Text(
-            text = "NERV",
-            style = MonoTnumStyle,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-          )
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            Text(
+              text = "NERV",
+              style = MonoTnumStyle,
+              color = MaterialTheme.colorScheme.primary,
+              maxLines = 1,
+            )
+            Text(
+              text = "version ${BuildConfig.VERSION_NAME}",
+              fontSize = 11.sp,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+              maxLines = 1,
+            )
+          }
         }
         IconButton(
               onClick = { NexoNavBridge.showWebBrowser = true },

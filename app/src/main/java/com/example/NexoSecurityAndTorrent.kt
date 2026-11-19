@@ -684,7 +684,7 @@ fun NexoTorrentManagerDialog(
     LaunchedEffect(initialTorrentPath) {
         if (initialTorrentPath.isNotBlank()) {
             NexoTorrentEngine.addLocalTorrentFile(initialTorrentPath) { msg ->
-                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
             }
         }
     }
@@ -696,7 +696,7 @@ fun NexoTorrentManagerDialog(
         if (uri != null) {
             scope.launch {
                 NexoTorrentEngine.addTorrentFile(context, uri) { msg ->
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                 }
             }
         }
@@ -756,7 +756,7 @@ fun NexoTorrentManagerDialog(
                             magnetInput = ""
                             scope.launch {
                                 NexoTorrentEngine.addMagnet(link) { msg ->
-                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                    android.os.Handler(android.os.Looper.getMainLooper()).post { Toast.makeText(context, msg, Toast.LENGTH_LONG).show() }
                                 }
                             }
                         }

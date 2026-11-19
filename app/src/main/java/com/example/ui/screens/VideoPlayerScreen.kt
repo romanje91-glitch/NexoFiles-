@@ -1,5 +1,15 @@
 package com.example.ui.screens
 
+import android.graphics.Color as AndroidColor
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.media3.common.C
+import androidx.media3.common.MimeTypes
+import androidx.media3.ui.CaptionStyleCompat
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.unit.sp
+import android.widget.Toast
 import com.example.NexoNavBridge
 import android.content.res.Configuration
 import androidx.compose.ui.platform.LocalConfiguration
@@ -99,6 +109,13 @@ fun VideoPlayerScreen(
       showControlsOverlay = false
     }
   }
+    var showVlcTrackDialog by remember { mutableStateOf(false) }
+  var subtitleScale by remember { mutableStateOf(1.0f) }
+  var subtitleColorIdx by remember { mutableStateOf(0) }
+  var loadedSubName by remember { mutableStateOf<String?>(null) }
+  var playerViewRef by remember { mutableStateOf<PlayerView?>(null) }
+
+
   DisposableEffect(Unit) {
     NexoNavBridge.isMediaViewerOpen = true
     onDispose {
@@ -116,6 +133,30 @@ fun VideoPlayerScreen(
       prepare()
     }
   }
+
+  val subPickerLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.OpenDocument()
+  ) { subUri ->
+    if (subUri != null) {
+      val pos = exoPlayer.currentPosition
+      val wasPlaying = exoPlayer.isPlaying
+      val mime = if (subUri.toString().endsWith(".vtt", true)) MimeTypes.TEXT_VTT else MimeTypes.APPLICATION_SUBRIP
+      val subCfg = MediaItem.SubtitleConfiguration.Builder(subUri)
+        .setMimeType(mime)
+        .setSelectionFlags(C.SELECTION_FLAG_DEFAULT)
+        .build()
+      val newItem = MediaItem.Builder()
+        .setUri(Uri.fromFile(videoFile))
+        .setSubtitleConfigurations(listOf(subCfg))
+        .build()
+      exoPlayer.setMediaItem(newItem, pos)
+      exoPlayer.prepare()
+      exoPlayer.playWhenReady = wasPlaying
+      loadedSubName = subUri.lastPathSegment ?: "Subtítulo externo"
+      Toast.makeText(context, "Subtítulos cargados", Toast.LENGTH_SHORT).show()
+    }
+  }
+
 
   DisposableEffect(exoPlayer) {
     val listener = object : Player.Listener {
@@ -287,6 +328,7 @@ Surface(
             PlayerView(ctx).apply {
           useController = false
           setOnClickListener { showControlsOverlay = !showControlsOverlay }
+          playerViewRef = this
               player = exoPlayer
               useController = false
               resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -449,6 +491,68 @@ Surface(
     }
 }
   }
+
+  LaunchedEffect(subtitleScale, subtitleColorIdx, playerViewRef) {
+    val pv = playerViewRef ?: return@LaunchedEffect
+    val fg = when (subtitleColorIdx) {
+      1 -> AndroidColor.YELLOW
+      2 -> AndroidColor.CYAN
+      else -> AndroidColor.WHITE
+    }
+    pv.subtitleView?.setStyle(
+      CaptionStyleCompat(fg, AndroidColor.argb(150, 0, 0, 0), AndroidColor.TRANSPARENT, CaptionStyleCompat.EDGE_TYPE_OUTLINE, AndroidColor.BLACK, null)
+    )
+    pv.subtitleView?.setFractionalTextSize(0.0533f * subtitleScale)
+  }
+
+  if (showControlsOverlay) {
+    Box(modifier = Modifier.fillMaxSize().padding(top = 56.dp, end = 12.dp), contentAlignment = Alignment.TopEnd) {
+      OutlinedButton(onClick = { showVlcTrackDialog = true }, shape = RoundedCornerShape(8.dp)) {
+        Text("CC / AUDIO", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+      }
+    }
+  }
+
+  if (showVlcTrackDialog) {
+    AlertDialog(
+      onDismissRequest = { showVlcTrackDialog = false },
+      title = { Text("Subtítulos y Audio (VLC)") },
+      text = {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+          OutlinedButton(
+            onClick = { subPickerLauncher.launch(arrayOf("*/*")) },
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("📂 Cargar subtítulo (.srt / .vtt)") }
+          loadedSubName?.let { Text("Activo: $it", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary) }
+          Text("Tamaño de subtítulos: ${(subtitleScale * 100).toInt()}%", fontSize = 12.sp)
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf("Pequeño" to 0.75f, "Normal" to 1.0f, "Grande" to 1.35f).forEach { (lbl, sc) ->
+              OutlinedButton(onClick = { subtitleScale = sc }, modifier = Modifier.weight(1f)) { Text(lbl, fontSize = 10.sp) }
+            }
+          }
+          Text("Color de subtítulos:", fontSize = 12.sp)
+          Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            listOf("Blanco" to 0, "Amarillo" to 1, "Cian" to 2).forEach { (lbl, idx) ->
+              OutlinedButton(onClick = { subtitleColorIdx = idx }, modifier = Modifier.weight(1f)) { Text(lbl, fontSize = 10.sp) }
+            }
+          }
+          OutlinedButton(
+            onClick = {
+              val curOff = exoPlayer.trackSelectionParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+              exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !curOff)
+                .build()
+              Toast.makeText(context, if (curOff) "Subtítulos activados" else "Subtítulos ocultos", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+          ) { Text("Activar / Ocultar subtítulos") }
+        }
+      },
+      confirmButton = {
+        TextButton(onClick = { showVlcTrackDialog = false }) { Text("Cerrar") }
+      }
+    )
+  }
 }
 
 private fun formatVideoTime(ms: Int): String {
@@ -461,4 +565,6 @@ private fun formatVideoTime(ms: Int): String {
   } else {
     String.format(Locale.US, "%02d:%02d", mins, secs)
   }
+
+
 }

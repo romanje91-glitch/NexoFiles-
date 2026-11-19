@@ -1,0 +1,11 @@
+{
+  "name": "NexoFiles Web",
+  "short_name": "NexoFiles",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0A0D14",
+  "theme_color": "#0A0D14",
+  "icons": [
+    { "src": "../app/src/main/res/drawable-nodpi/ic_nexo_eva_01.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

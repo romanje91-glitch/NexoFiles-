@@ -1,5 +1,9 @@
 package com.example
 
+import com.example.NexoCrashLibrary
+import com.example.NexoShareAppDialog
+import com.example.NexoMultiGoogleStore
+import com.example.ui.components.NexoOtaUpdater
 import com.example.ui.components.NexoXmbWaveBackground
 import androidx.compose.runtime.SideEffect
 import com.example.NexoGlobalClipboard
@@ -203,6 +207,7 @@ class MainActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     CrashLogger.install(applicationContext)
     super.onCreate(savedInstanceState)
+    NexoCrashLibrary.install(applicationContext)
     enableEdgeToEdge(
       statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
       navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -354,6 +359,8 @@ private fun NexoFilesRoot(
   var chooserTargetFile by remember { mutableStateOf<File?>(null) }
   var chooserTargetGallery by remember { mutableStateOf<List<String>>(emptyList()) }
   var showFullAudioPlayer by remember { mutableStateOf(false) }
+  var showShareAppDialog by remember { mutableStateOf(false) }
+  LaunchedEffect(driveState.accountEmail) { NexoMultiGoogleStore.registerAccount(context, driveState.accountEmail, driveState.accountName) }
 
   val audioPlayer = remember(context) { AudioPlayerManager(context, coroutineScope) }
   DisposableEffect(audioPlayer) {
@@ -605,7 +612,10 @@ private fun NexoFilesRoot(
   }
 
   CompositionLocalProvider(LocalStrings provides strings) {
-    if (NexoNavBridge.showWebBrowser) {
+    if (showShareAppDialog) {
+    NexoShareAppDialog(onDismiss = { showShareAppDialog = false })
+  }
+  if (NexoNavBridge.showWebBrowser) {
     NexoSimpleWebBrowserDialog(onDismiss = { NexoNavBridge.showWebBrowser = false })
   }
   if (NexoNavBridge.showTorrentManager) {
@@ -1564,7 +1574,7 @@ private fun NexoFilesRoot(
                 )
               }
             }
-              NexoXmbWaveBackground(modifier = Modifier.fillMaxSize())
+              if ((currentRoute == NexoRoutes.HOME || currentRoute == null) && !NexoNavBridge.isMediaViewerOpen && !NexoNavBridge.showWebBrowser && !NexoNavBridge.showTorrentManager) { NexoXmbWaveBackground(modifier = Modifier.fillMaxSize()) }
             }
           }
         }
