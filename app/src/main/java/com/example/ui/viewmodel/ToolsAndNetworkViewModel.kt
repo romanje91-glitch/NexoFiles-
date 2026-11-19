@@ -1,5 +1,6 @@
 package com.example.ui.viewmodel
 
+import com.example.MainActivity
 import com.example.NexoNotificationPrefs
 import com.example.NexoMultiGoogleStore
 import android.app.NotificationChannel
@@ -1407,6 +1408,7 @@ class ToolsAndNetworkViewModel(
         .setOnlyAlertOnce(true)
         .setOngoing(ongoing)
         .setAutoCancel(!ongoing)
+        .setContentIntent(PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
       if (ongoing) {
         builder.setProgress(100, progress.coerceIn(0, 100), progress <= 0)
       } else {
@@ -1438,6 +1440,8 @@ class ToolsAndNetworkViewModel(
     )
     emitMessage("Respaldo en Drive cancelado")
   }
+
+  fun reopenVaultBackupProgress() { _vaultState.value = _vaultState.value.copy(showBackupProgressDialog = true) }
 
   fun dismissVaultBackupProgress() {
     _vaultState.value = _vaultState.value.copy(showBackupProgressDialog = false)

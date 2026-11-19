@@ -147,6 +147,7 @@ fun VaultScreen(
   onBackupVaultToDrive: (String) -> Unit = {},
   onRunSmartBackup: () -> Unit = { onBackupVaultToDrive("") },
   onDismissBackupProgress: () -> Unit = {},
+  onReopenBackupProgress: () -> Unit = {},
   onCancelBackup: () -> Unit = {},
   onTogglePauseBackup: () -> Unit = {},
   onPasteVault: () -> Unit = {},
@@ -673,7 +674,7 @@ fun VaultScreen(
           contentPadding = PaddingValues(bottom = 24.dp),
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-          item { NexoSecureVaultSummaryPanel(localCount = state.items.size, localBytes = state.items.sumOf { it.sizeBytes }, cloudCount = state.driveBackups.size, onOpenDriveBackupModal = { onRunSmartBackup() }) }
+          item { NexoSecureVaultSummaryPanel(localCount = state.items.size, localBytes = state.items.sumOf { it.sizeBytes }, cloudCount = state.driveBackups.size, onOpenDriveBackupModal = { if (state.isDriveBusy) onReopenBackupProgress() else onRunSmartBackup() }) }
                 
       item(key = "vault_folders_bar") {
         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -1,5 +1,7 @@
 package com.example
 
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.unit.sp
@@ -1032,6 +1034,7 @@ private fun NexoFilesRoot(
                         onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onReopenBackupProgress = { toolsVm.reopenVaultBackupProgress() },
                     onCancelBackup = { toolsVm.cancelVaultBackup() },
                     onTogglePauseBackup = { toolsVm.togglePauseVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
@@ -1519,6 +1522,7 @@ private fun NexoFilesRoot(
                   onBackupVaultToDrive = { pass -> toolsVm.backupVaultToDrive(pass) },
                     onRunSmartBackup = { toolsVm.backupVaultToDrive("", emptySet(), showProgressModal = true) },
                     onDismissBackupProgress = { toolsVm.dismissVaultBackupProgress() },
+                    onReopenBackupProgress = { toolsVm.reopenVaultBackupProgress() },
                     onCancelBackup = { toolsVm.cancelVaultBackup() },
                     onTogglePauseBackup = { toolsVm.togglePauseVaultBackup() },
                     onPasteVault = { toolsVm.executeGlobalPasteToVault { explorerVm.loadDirectory(explorerState.currentPath) } },
@@ -2082,12 +2086,29 @@ private fun NexoDrawerSheet(
       }
         val drawerCtx = LocalContext.current
         Spacer(modifier = Modifier.height(10.dp))
-        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          OutlinedButton(onClick = { NexoShareLinks.checkUpdateNow(drawerCtx) }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
-            Text("↻ ACTUALIZAR", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+        val isEsDrawer = strings.languageTitle.contains("Idioma", ignoreCase = true)
+        Row(
+          modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          OutlinedButton(
+            onClick = { NexoShareLinks.checkUpdateNow(drawerCtx) },
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(0.dp),
+            modifier = Modifier.size(44.dp),
+          ) {
+            Icon(Icons.Rounded.Refresh, contentDescription = if (isEsDrawer) "Actualizar" else "Update", modifier = Modifier.size(20.dp))
           }
-          OutlinedButton(onClick = { NexoShareLinks.showShareDialog = true }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(8.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp)) {
-            Text("↗ COMPARTIR QR", fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+          Button(
+            onClick = { NexoShareLinks.showShareDialog = true },
+            modifier = Modifier.weight(1f).height(44.dp),
+            shape = RoundedCornerShape(10.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+          ) {
+            Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(if (isEsDrawer) "COMPARTIR" else "SHARE", fontSize = 12.sp, fontWeight = FontWeight.Bold, maxLines = 1)
           }
         }
         Spacer(modifier = Modifier.height(12.dp))

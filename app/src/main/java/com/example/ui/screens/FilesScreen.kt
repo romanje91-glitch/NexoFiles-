@@ -1037,7 +1037,7 @@ private fun FileListItemCard(
           .clip(iconShape)
           .background(
             when {
-              isSelected -> MaterialTheme.colorScheme.primary
+              isSelected -> (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))
               item.isDirectory -> MaterialTheme.colorScheme.secondary
               else -> NexoTheme.semantic.tacticalSurface
             },
@@ -1045,7 +1045,7 @@ private fun FileListItemCard(
           .border(
             width = 1.dp,
             color = when {
-              isSelected -> MaterialTheme.colorScheme.primary
+              isSelected -> (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))
               item.isDirectory -> MaterialTheme.colorScheme.secondary
               else -> MaterialTheme.colorScheme.outline
             },
@@ -1059,7 +1059,7 @@ private fun FileListItemCard(
           tint = when {
             isSelected -> MaterialTheme.colorScheme.onPrimary
             item.isDirectory -> MaterialTheme.colorScheme.onSecondary
-            item.isHidden || FormatUtils.isAudio(item.name) -> MaterialTheme.colorScheme.primary
+            item.isHidden || FormatUtils.isAudio(item.name) -> (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))
             else -> MaterialTheme.colorScheme.onSurface
           },
           modifier = Modifier.size(if (layoutViewMode == LayoutViewMode.COMPACT) 20.dp else 26.dp),
@@ -1074,8 +1074,8 @@ private fun FileListItemCard(
           style = if (layoutViewMode == LayoutViewMode.COMPACT) MaterialTheme.typography.titleSmall else MaterialTheme.typography.titleMedium,
           fontWeight = FontWeight.SemiBold,
           color = when {
-            isSelected -> MaterialTheme.colorScheme.primary
-            item.isDirectory && !item.isHidden -> MaterialTheme.colorScheme.primary
+            isSelected -> (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))
+            item.isDirectory && !item.isHidden -> (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))
             item.isHidden -> MaterialTheme.colorScheme.onSurfaceVariant
             else -> MaterialTheme.colorScheme.onSurface
           },
@@ -1114,7 +1114,7 @@ private fun FileListItemCard(
                   Brush.horizontalGradient(
                     colors = listOf(
                       MaterialTheme.colorScheme.secondary,
-                      MaterialTheme.colorScheme.primary,
+                      (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827)),
                     ),
                   ),
                 ),
@@ -1138,7 +1138,7 @@ IconButton(
           Icon(
             imageVector = NexoIcons.MoreHoriz,
             contentDescription = "Opciones",
-            tint = MaterialTheme.colorScheme.primary,
+            tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827)),
             modifier = Modifier.size(18.dp),
           )
         }
@@ -1148,19 +1148,19 @@ IconButton(
           onDismissRequest = { menuExpanded = false },
           modifier = Modifier
             .background(NexoTheme.semantic.modalSurface)
-            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
+            .border(1.dp, (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827)).copy(alpha = 0.7f)),
         ) {
           if (!item.isDirectory) {
             DropdownMenuItem(
-              text = { Text(strings.openWith, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold) },
-              leadingIcon = { Icon(NexoIcons.OpenWith, null, tint = MaterialTheme.colorScheme.primary) },
+              text = { Text(strings.openWith, color = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827)), fontWeight = FontWeight.SemiBold) },
+              leadingIcon = { Icon(NexoIcons.OpenWith, null, tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
               onClick = { menuExpanded = false; onOpenWith() },
             )
           }
           if (!item.isDirectory && FormatUtils.isArchive(item.name)) {
             DropdownMenuItem(
-              text = { Text(strings.extractHere, color = MaterialTheme.colorScheme.primary) },
-              leadingIcon = { Icon(NexoIcons.Archive, null, tint = MaterialTheme.colorScheme.primary) },
+              text = { Text(strings.extractHere, color = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
+              leadingIcon = { Icon(NexoIcons.Archive, null, tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
               onClick = { menuExpanded = false; onExtractArchive() },
             )
           }
@@ -1173,8 +1173,8 @@ IconButton(
           }
           if (!item.isDirectory && FormatUtils.isTextEditable(item.name)) {
             DropdownMenuItem(
-              text = { Text(strings.editInNexoNotes, color = MaterialTheme.colorScheme.primary) },
-              leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = MaterialTheme.colorScheme.primary) },
+              text = { Text(strings.editInNexoNotes, color = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
+              leadingIcon = { Icon(Icons.Rounded.Edit, null, tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
               onClick = { menuExpanded = false; onEditNote() },
             )
           }
@@ -1200,7 +1200,7 @@ IconButton(
           )
           DropdownMenuItem(
             text = { Text(strings.properties, color = MaterialTheme.colorScheme.onSurface) },
-            leadingIcon = { Icon(Icons.Rounded.Info, null, tint = MaterialTheme.colorScheme.primary) },
+            leadingIcon = { Icon(Icons.Rounded.Info, null, tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
             onClick = { menuExpanded = false; onProperties() },
           )
           DropdownMenuItem(
@@ -1216,7 +1216,7 @@ IconButton(
             )
             DropdownMenuItem(
               text = { Text(strings.uploadToDrive, color = MaterialTheme.colorScheme.onSurface) },
-              leadingIcon = { Icon(NexoIcons.CloudUpload, null, tint = MaterialTheme.colorScheme.primary) },
+              leadingIcon = { Icon(NexoIcons.CloudUpload, null, tint = (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827))) },
               onClick = { menuExpanded = false; onUploadDrive() },
             )
             DropdownMenuItem(
@@ -1263,7 +1263,7 @@ private fun ActionIconButton(
     Icon(
       icon,
       contentDescription = label,
-      tint = if (isAlert) NexoTheme.semantic.evaRed else MaterialTheme.colorScheme.primary,
+      tint = if (isAlert) NexoTheme.semantic.evaRed else (if (MaterialTheme.colorScheme.background.luminance() < 0.5f) Color.White else Color(0xFF111827)),
       modifier = Modifier.size(20.dp),
     )
     Text(

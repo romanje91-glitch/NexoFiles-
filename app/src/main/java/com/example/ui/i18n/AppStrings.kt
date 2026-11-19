@@ -1,5 +1,7 @@
 package com.example.ui.i18n
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.core.os.LocaleListCompat
@@ -992,13 +994,13 @@ object EsStrings : AppStrings {
   override val settingsTitle = "Ajustes"
   override val settingsSubtitle = "Configuración general y seguridad de Bóveda"
   override val expandCollapseCd = "Expandir o contraer"
-  override val block1Title = "1. Ajustes Generales"
-  override val block1Display = "1.1 Pantalla (Display)"
-  override val block1Cleanup = "1.2 Limpieza y Mantenimiento"
-  override val block1Directories = "1.3 Ajustes de Directorios"
-  override val block1Search = "1.4 Motor de búsqueda"
-  override val block1Notifications = "1.5 Notificaciones"
-  override val block1FloatingLogger = "1.6 Widget flotante de registro"
+  override val block1Title = "Ajustes Generales"
+  override val block1Display = "Pantalla (Display)"
+  override val block1Cleanup = "Limpieza y Mantenimiento"
+  override val block1Directories = "Ajustes de Directorios"
+  override val block1Search = "Motor de búsqueda"
+  override val block1Notifications = "Notificaciones"
+  override val block1FloatingLogger = "Widget flotante de registro"
   override val themeTitle = "Tema HUD"
   override val languageTitle = "Idioma / Language"
   override val languageSelectModalTitle = "Seleccionar idioma"
@@ -1038,7 +1040,7 @@ object EsStrings : AppStrings {
   override val floatingLoggerFormats = "Formatos monitorizados (ej. apk,pdf,zip)"
   override val floatingLoggerSourceApp = "App de origen"
 
-  override val block2Title = "2. Gestión de Diseño"
+  override val block2Title = "Gestión de Diseño"
   override val defaultViewTitle = "Vista de lista predeterminada"
   override val drawerSetupBtn = "Configurar Menú Lateral"
   override val toolbarSetupBtn = "Personalizar Barra de Herramientas"
@@ -1053,7 +1055,7 @@ object EsStrings : AppStrings {
   override val configureToolbarTitle = "Barra inferior de selección"
   override val toolbarSelectNote = "Activa las acciones que aparecen al seleccionar archivos."
 
-  override val block3Title = "3. Seguridad de Bóveda y Respaldo"
+  override val block3Title = "Seguridad de Bóveda y Respaldo"
   override val biometricAccessTitle = "Acceso biométrico a Bóveda"
   override val biometricAccessDesc = "Solicitar huella o rostro al abrir"
   override val biometricNotAvailable = "Sensor biométrico no configurado en el dispositivo"
@@ -1091,7 +1093,7 @@ object EsStrings : AppStrings {
   override val vaultCredentialIncorrect = "Credencial actual incorrecta"
   override val vaultSecurityUpdatedToast: (String) -> String = { method -> "Seguridad de Bóveda actualizada: $method" }
 
-  override val block4Title = "4. Ajustes de Herramientas"
+  override val block4Title = "Ajustes de Herramientas"
   override val defaultSortTitle = "Orden predeterminado"
   override val autoBackupApkTitle = "Respaldar APK antes de desinstalar"
   override val apkBackupFolderLabel = "Directorio de respaldo APK"
@@ -1109,7 +1111,7 @@ object EsStrings : AppStrings {
   override val gestureRouteLabel = "Ruta o destino (sender, drive, vault)"
   override val viewOnPcPortLabel: (Int) -> String = { port -> "Puerto actual del servidor Ver en PC: $port" }
 
-  override val block5Title = "5. Sistema y Acerca de"
+  override val block5Title = "Sistema y Acerca de"
   override val autoCheckUpdates = "Buscar actualizaciones automáticamente"
   override val crashDiagTitle = "Diagnóstico y Reporte de Errores"
   override val crashDiagSubtitle = "Inspeccionar nexofiles_error_log.txt y copiar traza de fallos"
@@ -1121,7 +1123,7 @@ object EsStrings : AppStrings {
   override val crashCopiedToast = "Reporte de error copiado al portapapeles"
   override val versionLabel = "Versión"
   override val aboutNexoTitle = "Acerca de NexoFiles"
-  override val aboutNexoDesc = "NERV HUD Explorer v2.4b · Cero anuncios · Código limpio"
+  override val aboutNexoDesc = "NERV HUD Explorer v2.5b · Cero anuncios · Código limpio"
   override val privacyPolicyTitle = "Política de Privacidad"
   override val privacyPolicyDesc = "Sin telemetría. Todos los datos permanecen en tu dispositivo o tu Google Drive."
   override val helpFeedbackTitle = "Ayuda y Comentarios"
@@ -1641,13 +1643,13 @@ object EnStrings : AppStrings {
   override val settingsTitle = "Settings"
   override val settingsSubtitle = "General and Vault security configuration"
   override val expandCollapseCd = "Expand or collapse"
-  override val block1Title = "1. General Settings"
-  override val block1Display = "1.1 Display settings"
-  override val block1Cleanup = "1.2 Cleanup & Maintenance"
-  override val block1Directories = "1.3 Directory settings"
-  override val block1Search = "1.4 Search engine"
-  override val block1Notifications = "1.5 Notifications"
-  override val block1FloatingLogger = "1.6 Floating logger widget"
+  override val block1Title = "General Settings"
+  override val block1Display = "Display settings"
+  override val block1Cleanup = "Cleanup & Maintenance"
+  override val block1Directories = "Directory settings"
+  override val block1Search = "Search engine"
+  override val block1Notifications = "Notifications"
+  override val block1FloatingLogger = "Floating logger widget"
   override val themeTitle = "HUD Theme"
   override val languageTitle = "Language"
   override val languageSelectModalTitle = "Select language"
@@ -1687,7 +1689,7 @@ object EnStrings : AppStrings {
   override val floatingLoggerFormats = "Monitored formats (e.g. apk,pdf,zip)"
   override val floatingLoggerSourceApp = "Source app"
 
-  override val block2Title = "2. Layout Management"
+  override val block2Title = "Layout Management"
   override val defaultViewTitle = "Default list view"
   override val drawerSetupBtn = "Configure Side Drawer"
   override val toolbarSetupBtn = "Customize Action Toolbar"
@@ -1702,7 +1704,7 @@ object EnStrings : AppStrings {
   override val configureToolbarTitle = "Bottom selection toolbar"
   override val toolbarSelectNote = "Toggle actions shown when selecting files."
 
-  override val block3Title = "3. Vault Security & Backup"
+  override val block3Title = "Vault Security & Backup"
   override val biometricAccessTitle = "Biometric Vault access"
   override val biometricAccessDesc = "Require fingerprint or face unlock"
   override val biometricNotAvailable = "Biometric sensor is not enrolled on this device"
@@ -1740,7 +1742,7 @@ object EnStrings : AppStrings {
   override val vaultCredentialIncorrect = "Current credential is incorrect"
   override val vaultSecurityUpdatedToast: (String) -> String = { method -> "Vault security updated: $method" }
 
-  override val block4Title = "4. Tool Settings"
+  override val block4Title = "Tool Settings"
   override val defaultSortTitle = "Default sort order"
   override val autoBackupApkTitle = "Back up APK before uninstalling"
   override val apkBackupFolderLabel = "APK backup directory"
@@ -1758,7 +1760,7 @@ object EnStrings : AppStrings {
   override val gestureRouteLabel = "Route or target (sender, drive, vault)"
   override val viewOnPcPortLabel: (Int) -> String = { port -> "Current View on PC server port: $port" }
 
-  override val block5Title = "5. System & About"
+  override val block5Title = "System & About"
   override val autoCheckUpdates = "Check for updates automatically"
   override val crashDiagTitle = "Diagnostics & Crash Reports"
   override val crashDiagSubtitle = "Inspect nexofiles_error_log.txt and copy stacktrace"
@@ -1770,7 +1772,7 @@ object EnStrings : AppStrings {
   override val crashCopiedToast = "Crash report copied to clipboard"
   override val versionLabel = "Version"
   override val aboutNexoTitle = "About NexoFiles"
-  override val aboutNexoDesc = "NERV HUD Explorer v2.4b · Zero ads · Clean build"
+  override val aboutNexoDesc = "NERV HUD Explorer v2.5b · Zero ads · Clean build"
   override val privacyPolicyTitle = "Privacy Policy"
   override val privacyPolicyDesc = "Zero telemetry. All data stays on your device or your own Google Drive."
   override val helpFeedbackTitle = "Help & Feedback"

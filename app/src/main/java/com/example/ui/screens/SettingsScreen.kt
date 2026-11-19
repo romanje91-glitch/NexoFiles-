@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Switch
 import android.widget.Toast
 import androidx.compose.ui.unit.sp
@@ -450,7 +452,7 @@ fun SettingsScreen(
         subtitle = strings.block1FloatingLogger,
         icon = NexoIcons.Notifications,
         expanded = expandedPanel == "NOTIF",
-        onToggle = { expandedPanel = if (expandedPanel == "NOTIF") "" else "NOTIF" },
+        onToggle = { showNotificationsDialog = true },
       ) {
         SettingsSwitchRow(strings.dismissNotifOnFinish, null, allSettings.dismissNotifOnTaskFinish) { onUpdateBooleanSetting("dismiss_notif_on_finish", it) }
         SettingsSwitchRow(strings.notifyApkPermissions, null, allSettings.notifyApkInstallPermissions) { onUpdateBooleanSetting("notify_apk_permissions", it) }
@@ -800,7 +802,6 @@ fun SettingsScreen(
           Text(msg, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
         }
         HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-          OutlinedButton(onClick = { showNotificationsDialog = true }, modifier = Modifier.fillMaxWidth()) { Text("🔔 NOTIFICACIONES DE LA APP", fontWeight = FontWeight.Bold) }
         Button(
 
           onClick = { showCrashDiagnosticsDialog = true },
