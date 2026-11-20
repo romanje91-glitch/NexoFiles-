@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import com.example.NexoFeatureFlags
+import com.example.NexoDriveAccountsTopBar
+import com.example.NexoDriveDisabledGate
 import androidx.compose.ui.unit.sp
 import com.example.NexoMultiGoogleStore
 import androidx.compose.ui.graphics.luminance
@@ -131,7 +134,7 @@ fun GoogleDriveScreen(
   val context = LocalContext.current
   val activity = context as? Activity
   val strings = LocalStrings.current
-  var activeCloudTab by remember(initialCloudTab) { mutableIntStateOf(initialCloudTab) }
+  var activeCloudTab by remember { mutableIntStateOf(0) }
   var showCreateFolderDialog by remember { mutableStateOf(false) }
   var transferTargetFile by remember { mutableStateOf<DriveFileItem?>(null) }
   var showAddRuleDialog by remember { mutableStateOf(false) }
@@ -173,8 +176,22 @@ fun GoogleDriveScreen(
     }
   }
 
+  val isEsDrive = strings.languageTitle.contains("Idioma", ignoreCase = true)
+  LaunchedEffect(Unit) { NexoFeatureFlags.init(context); NexoMultiGoogleStore.init(context) }
+  if (!NexoFeatureFlags.driveEnabled) {
+    NexoDriveDisabledGate(isEs = isEsDrive, onEnableDrive = { NexoFeatureFlags.setDrive(context, true) })
+    return
+  }
   Scaffold(
     containerColor = MaterialTheme.colorScheme.background,
+    topBar = {
+      NexoDriveAccountsTopBar(
+        activeEmail = driveState.accountEmail,
+        isEs = isEsDrive,
+        onSwitchAccount = { email -> onSwitchDriveAccount(email) },
+        onAddAccount = { (context as? Activity)?.let { onConnectDrive(it) } }
+      )
+    },
     bottomBar = {
       if (activeCloudTab == 0) {
           LaunchedEffect(Unit) { NexoMultiGoogleStore.init(context) }

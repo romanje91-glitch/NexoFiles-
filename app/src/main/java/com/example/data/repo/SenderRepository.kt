@@ -400,7 +400,7 @@ class SenderRepository(
         <div class="card">
           <h2 style="margin-top:0;font-size:15px;color:#A78BFA">ENVIAR ARCHIVO A ${nickname.escapeHtml()}</h2>
           <form method="post" action="/upload" enctype="multipart/form-data">
-            <input type="file" name="file" required style="color:#AEA1CF;margin-bottom:10px"/><br/>
+            <input type="file" multiple name="file" required style="color:#AEA1CF;margin-bottom:10px"/><br/>
             <button class="btn" type="submit">SUBIR A NEXOFILES</button>
           </form>
         </div>

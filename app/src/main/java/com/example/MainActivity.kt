@@ -1,5 +1,10 @@
 package com.example
 
+import com.example.NexoPlayerPrefs
+import com.example.NexoOnboardingStore
+import com.example.NexoFirstRunOnboardingDialog
+import com.example.NexoFeatureFlags
+import com.example.NexoVaultDeepLink
 import android.view.WindowManager
 import com.example.NexoMasterDirs
 import com.example.NexoVaultFlipGuard
@@ -219,11 +224,21 @@ private data class BottomTab(
 )
 
 class MainActivity : FragmentActivity() {
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    if (intent.getBooleanExtra("nexo_open_vault", false)) {
+      NexoVaultDeepLink.pendingOpenVault = true
+    }
+  }
+
   override fun onCreate(savedInstanceState: Bundle?) {
     CrashLogger.install(applicationContext)
     super.onCreate(savedInstanceState)
     NexoCrashLibrary.install(applicationContext)
     NexoMasterDirs.ensureAll()
+    NexoFeatureFlags.init(applicationContext)
+    NexoPlayerPrefs.init(applicationContext)
+    if (intent?.getBooleanExtra("nexo_open_vault", false) == true) { NexoVaultDeepLink.pendingOpenVault = true }
     enableEdgeToEdge(
       statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
       navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -376,6 +391,7 @@ private fun NexoFilesRoot(
   var chooserTargetGallery by remember { mutableStateOf<List<String>>(emptyList()) }
   var showFullAudioPlayer by remember { mutableStateOf(false) }
   var showShareAppDialog by remember { mutableStateOf(false) }
+  var showFirstRunOnboarding by remember { mutableStateOf(NexoOnboardingStore.shouldShow(context)) }
   DisposableEffect(currentRoute) {
     val act = context as? android.app.Activity
     if (currentRoute == NexoRoutes.VAULT) {
@@ -399,6 +415,13 @@ private fun NexoFilesRoot(
   LaunchedEffect(Unit) {
     if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
       notifPermLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+    }
+  }
+  LaunchedEffect(NexoVaultDeepLink.pendingOpenVault) {
+    if (NexoVaultDeepLink.pendingOpenVault) {
+      NexoVaultDeepLink.pendingOpenVault = false
+      navController.navigate(NexoRoutes.VAULT) { launchSingleTop = true }
+      if (vaultState.isDriveBusy) toolsVm.reopenVaultBackupProgress()
     }
   }
   LaunchedEffect(driveState.accountEmail, driveState.accessToken) { NexoMultiGoogleStore.registerAccount(context, driveState.accountEmail, driveState.accountName, driveState.accessToken) }
@@ -653,7 +676,24 @@ private fun NexoFilesRoot(
   }
 
   CompositionLocalProvider(LocalStrings provides strings) {
-    if (showShareAppDialog || NexoShareLinks.showShareDialog) {
+    if (showFirstRunOnboarding) {
+    val isEsOnb = strings.languageTitle.contains("Idioma", ignoreCase = true)
+    NexoFirstRunOnboardingDialog(
+      context = context,
+      isEs = isEsOnb,
+      onRequestStorage = {
+        if (Build.VERSION.SDK_INT >= 30) {
+          runCatching {
+            val i = android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))
+            context.startActivity(i)
+          }
+        }
+      },
+      onConnectDrive = { (context as? android.app.Activity)?.let { toolsVm.connectGoogleDrive(it) } },
+      onComplete = { showFirstRunOnboarding = false }
+    )
+  }
+  if (showShareAppDialog || NexoShareLinks.showShareDialog) {
     NexoShareAppDialog(onDismiss = { showShareAppDialog = false; NexoShareLinks.showShareDialog = false })
   }
   if (NexoNavBridge.showWebBrowser) {

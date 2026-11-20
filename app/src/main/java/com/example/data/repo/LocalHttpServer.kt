@@ -339,7 +339,7 @@ class LocalHttpServer {
             <h1>NEXOFILES · PUENTE WEB LAN</h1>
             <div class="path">/${relPath.escapeHtml()}</div>
             <form style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;" method="post" action="/upload?dir=$encodedRel" enctype="multipart/form-data">
-              <input type="file" name="file" required />
+              <input type="file" multiple name="file" required />
               <button type="submit">SUBIR AL DISPOSITIVO</button>
             </form>
           </div>

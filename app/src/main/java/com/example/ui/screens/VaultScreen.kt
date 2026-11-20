@@ -1,5 +1,9 @@
 package com.example.ui.screens
 
+import com.example.NexoFeatureFlags
+import com.example.NexoVaultCloudActionDialog
+import com.example.NexoAtFieldVaultGate
+import com.example.NexoCloudStatusIcon
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.window.Dialog
@@ -142,6 +146,7 @@ fun VaultScreen(
   onOpenVaultItem: (VaultFileItem) -> Unit,
   onRestoreVaultItem: (VaultFileItem) -> Unit,
   onDeleteVaultItem: (VaultFileItem) -> Unit,
+  onDeleteVaultCloudBackup: (VaultFileItem) -> Unit = {},
   onConnectDrive: () -> Unit = {},
   onRefreshDriveBackups: () -> Unit = {},
   onBackupVaultToDrive: (String) -> Unit = {},
@@ -175,13 +180,30 @@ fun VaultScreen(
   var secretInput by remember(activeLockMethod) { mutableStateOf("") }
   val patternNodes = remember(activeLockMethod) { mutableStateListOf<Int>() }
 
-  LaunchedEffect(Unit) { NexoVaultExtraStore.init(context) }
+  LaunchedEffect(Unit) {
+    NexoVaultExtraStore.init(context)
+    NexoFeatureFlags.init(context)
+    if (isDriveAuthorized && state.driveBackups.isEmpty() && !state.isDriveBusy) {
+      onRefreshDriveBackups()
+    }
+  }
+  val isEsVault = strings.languageTitle.contains("Idioma", ignoreCase = true)
+  if (!NexoFeatureFlags.vaultEnabled) {
+    NexoAtFieldVaultGate(
+      isEs = isEsVault,
+      isDriveAuthorized = isDriveAuthorized,
+      onActivateVault = { NexoFeatureFlags.setVault(context, true) },
+      onConnectDrive = onConnectDrive
+    )
+    return
+  }
   var showDriveBackupModal by remember { mutableStateOf(false) }
   var showNewVaultFolderDialog by remember { mutableStateOf(false) }
   var newVaultFolderName by remember { mutableStateOf("") }
   var pendingCloudDownloadItem by remember { mutableStateOf<NexoCloudPlaceholderItem?>(null) }
   var pendingDeleteChoiceItem by remember { mutableStateOf<VaultFileItem?>(null) }
     var pendingSelectiveDeleteItem by remember { mutableStateOf<VaultFileItem?>(null) }
+  var pendingCloudActionItem by remember { mutableStateOf<Pair<VaultFileItem, Boolean>?>(null) }
   var showPortalModal by remember { mutableStateOf(false) }
   var selectedVaultIds by remember(state.items) { mutableStateOf(setOf<String>()) }
   var showMoveToFolderDialog by remember { mutableStateOf(false) }
@@ -956,17 +978,22 @@ fun VaultScreen(
                     )
                   }
                 }
-                IconButton(
-                  onClick = { onRestoreVaultItem(item) },
-                  modifier = Modifier.testTag("vault_restore_${item.id}"),
-                ) {
-                  Icon(NexoIcons.Restore, contentDescription = strings.restore, tint = MaterialTheme.colorScheme.primary)
+                val isInCloud = remember(state.driveBackups, item.id, item.originalName) {
+                  state.driveBackups.any { b ->
+                    val clean = b.originalName.substringAfterLast(" / ").removeSuffix(".nexo_vault")
+                    clean.equals(item.originalName, ignoreCase = true) ||
+                      b.driveFile.name.removeSuffix(".nexo_vault").equals(item.originalName, ignoreCase = true) ||
+                      b.driveFile.name.contains(item.id, ignoreCase = true)
+                  }
                 }
                 IconButton(
-                  onClick = { pendingSelectiveDeleteItem = item },
-                  modifier = Modifier.testTag("vault_delete_${item.id}"),
+                  onClick = { pendingCloudActionItem = item to isInCloud },
+                  modifier = Modifier.testTag("vault_cloud_action_${item.id}"),
                 ) {
-                  Icon(NexoIcons.DeleteForever, contentDescription = strings.deleteForever, tint = NexoTheme.semantic.evaRed)
+                  NexoCloudStatusIcon(
+                    isBackedUpInCloud = isInCloud,
+                    tint = if (isInCloud) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                  )
                 }
               }
             }
@@ -976,6 +1003,25 @@ fun VaultScreen(
     }
   }
 
+  pendingCloudActionItem?.let { (target, inCloud) ->
+    NexoVaultCloudActionDialog(
+      fileName = target.originalName,
+      isBackedUpInCloud = inCloud,
+      isEs = isEsVault,
+      onUploadToCloud = {
+        if (state.isDriveBusy) onReopenBackupProgress()
+        else onBackupSelectedVaultToDrive("", setOf(target.id))
+      },
+      onRestoreToDevice = { onRestoreVaultItem(target) },
+      onDeleteLocalOnly = { onDeleteVaultItem(target) },
+      onDeleteCloudOnly = { onDeleteVaultCloudBackup(target) },
+      onDeleteBoth = {
+        if (inCloud) onDeleteVaultCloudBackup(target)
+        onDeleteVaultItem(target)
+      },
+      onDismiss = { pendingCloudActionItem = null }
+    )
+  }
   if (pendingSelectiveDeleteItem != null) {
         val t = pendingSelectiveDeleteItem!!
         NexoVaultSelectiveDeleteDialog(

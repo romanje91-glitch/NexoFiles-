@@ -1408,7 +1408,7 @@ class ToolsAndNetworkViewModel(
         .setOnlyAlertOnce(true)
         .setOngoing(ongoing)
         .setAutoCancel(!ongoing)
-        .setContentIntent(PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
+        .setContentIntent(PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java).putExtra("nexo_open_vault", true).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT))
       if (ongoing) {
         builder.setProgress(100, progress.coerceIn(0, 100), progress <= 0)
       } else {
@@ -1426,9 +1426,34 @@ class ToolsAndNetworkViewModel(
     }
   }
 
+
+  fun deleteVaultCloudBackup(item: com.example.data.model.VaultFileItem) {
+    val match = _vaultState.value.driveBackups.firstOrNull { b ->
+      val clean = b.originalName.substringAfterLast(" / ").removeSuffix(".nexo_vault")
+      clean.equals(item.originalName, ignoreCase = true) ||
+        b.driveFile.name.removeSuffix(".nexo_vault").equals(item.originalName, ignoreCase = true) ||
+        b.driveFile.name.contains(item.id, ignoreCase = true)
+    }
+    if (match == null) {
+      emitMessage("No existe respaldo en la nube para ${item.originalName}")
+      return
+    }
+    viewModelScope.launch {
+      withDriveTokenRetry { token -> container.googleDrive.deleteFile(token, match.driveFile.id) }
+        .onSuccess {
+          emitMessage("Respaldo eliminado de la nube: ${item.originalName}")
+          refreshVaultDriveBackups()
+        }
+        .onFailure { err ->
+          emitMessage("Error eliminando en la nube: ${err.localizedMessage}")
+        }
+    }
+  }
+
   fun cancelVaultBackup() {
     vaultBackupPaused = false
     vaultBackupJob?.cancel()
+    refreshVaultDriveBackups()
     vaultBackupJob = null
     cancelVaultBackupNotification()
     _vaultState.value = _vaultState.value.copy(
