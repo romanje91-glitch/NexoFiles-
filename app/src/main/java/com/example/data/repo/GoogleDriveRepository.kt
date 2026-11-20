@@ -371,30 +371,66 @@ class GoogleDriveRepository(
         put("parents", org.json.JSONArray().put(parentFolderId))
       }.toString()
 
-      val multipart = MultipartBody.Builder()
-        .setType("multipart/related".toMediaType())
-        .addPart(metadata.toRequestBody("application/json; charset=utf-8".toMediaType()))
-        .addPart(localFile.asRequestBody(mime.toMediaType()))
-        .build()
+      if (localFile.length() <= 4L * 1024L * 1024L) {
+        val multipart = MultipartBody.Builder()
+          .setType("multipart/related".toMediaType())
+          .addPart(metadata.toRequestBody("application/json; charset=utf-8".toMediaType()))
+          .addPart(localFile.asRequestBody(mime.toMediaType()))
+          .build()
 
-      val req = Request.Builder()
-        .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime")
-        .header("Authorization", "Bearer $accessToken")
-        .post(multipart)
-        .build()
+        val req = Request.Builder()
+          .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime")
+          .header("Authorization", "Bearer $accessToken")
+          .post(multipart)
+          .build()
 
-      client.newCall(req).execute().use { resp ->
-        val body = resp.body?.string().orEmpty()
-        if (!resp.isSuccessful) throw IllegalStateException("Error subiendo archivo (${resp.code}): $body")
-        val obj = JSONObject(body)
-        DriveFileItem(
-          id = obj.getString("id"),
-          name = obj.optString("name", localFile.name),
-          mimeType = obj.optString("mimeType", mime),
-          sizeBytes = obj.optString("size", localFile.length().toString()).toLongOrNull() ?: localFile.length(),
-          modifiedTime = obj.optString("modifiedTime", ""),
-          isFolder = false,
-        )
+        client.newCall(req).execute().use { resp ->
+          val body = resp.body?.string().orEmpty()
+          if (!resp.isSuccessful) throw IllegalStateException("Error subiendo archivo (${resp.code}): $body")
+          val obj = JSONObject(body)
+          DriveFileItem(
+            id = obj.getString("id"),
+            name = obj.optString("name", localFile.name),
+            mimeType = obj.optString("mimeType", mime),
+            sizeBytes = obj.optString("size", localFile.length().toString()).toLongOrNull() ?: localFile.length(),
+            modifiedTime = obj.optString("modifiedTime", ""),
+            isFolder = false,
+          )
+        }
+      } else {
+        // Resumable upload para archivos > 4 MB (evita cuelgues y timeouts de multipart)
+        val initReq = Request.Builder()
+          .url("https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,modifiedTime")
+          .header("Authorization", "Bearer $accessToken")
+          .header("X-Upload-Content-Type", mime)
+          .header("X-Upload-Content-Length", localFile.length().toString())
+          .post(metadata.toRequestBody("application/json; charset=utf-8".toMediaType()))
+          .build()
+
+        val uploadUrl = client.newCall(initReq).execute().use { resp ->
+          if (!resp.isSuccessful) throw IllegalStateException("Error iniciando subida resumable (${resp.code})")
+          resp.header("Location") ?: throw IllegalStateException("Google Drive no devolvió URL resumable")
+        }
+
+        val putReq = Request.Builder()
+          .url(uploadUrl)
+          .header("Content-Type", mime)
+          .put(localFile.asRequestBody(mime.toMediaType()))
+          .build()
+
+        client.newCall(putReq).execute().use { resp ->
+          val body = resp.body?.string().orEmpty()
+          if (!resp.isSuccessful) throw IllegalStateException("Error subiendo resumable (${resp.code}): $body")
+          val obj = JSONObject(body)
+          DriveFileItem(
+            id = obj.getString("id"),
+            name = obj.optString("name", localFile.name),
+            mimeType = obj.optString("mimeType", mime),
+            sizeBytes = obj.optString("size", localFile.length().toString()).toLongOrNull() ?: localFile.length(),
+            modifiedTime = obj.optString("modifiedTime", ""),
+            isFolder = false,
+          )
+        }
       }
     }
   }

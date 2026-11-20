@@ -4,6 +4,8 @@ import com.example.NexoFeatureFlags
 import com.example.NexoVaultCloudActionDialog
 import com.example.NexoAtFieldVaultGate
 import com.example.NexoCloudStatusIcon
+import com.example.NexoVaultExpandableFab
+import com.example.NexoVaultCloudSyncDialog
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.window.Dialog
@@ -198,6 +200,7 @@ fun VaultScreen(
     return
   }
   var showDriveBackupModal by remember { mutableStateOf(false) }
+  var showCloudSyncPanel by remember { mutableStateOf(false) }
   var showNewVaultFolderDialog by remember { mutableStateOf(false) }
   var newVaultFolderName by remember { mutableStateOf("") }
   var pendingCloudDownloadItem by remember { mutableStateOf<NexoCloudPlaceholderItem?>(null) }
@@ -225,17 +228,17 @@ fun VaultScreen(
   }
 
   val photoPickerLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.PickVisualMedia(),
-  ) { uri ->
+    contract = ActivityResultContracts.PickMultipleVisualMedia(),
+  ) { uris ->
     onExternalPickerStateChange(false)
-    uri?.let(onAddUriToVault)
+    uris.forEach(onAddUriToVault)
   }
 
   val safPickerLauncher = rememberLauncherForActivityResult(
-    contract = ActivityResultContracts.OpenDocument(),
-  ) { uri ->
+    contract = ActivityResultContracts.OpenMultipleDocuments(),
+  ) { uris ->
     onExternalPickerStateChange(false)
-    uri?.let(onAddUriToVault)
+    uris.forEach(onAddUriToVault)
   }
 
   fun triggerBiometricUnlock() {
@@ -276,12 +279,12 @@ fun VaultScreen(
     }
   }
 
+  Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
   Column(
     modifier = Modifier
       .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background)
-      .padding(horizontal = 16.dp, vertical = 12.dp),
-    verticalArrangement = Arrangement.spacedBy(12.dp),
+      .padding(horizontal = 14.dp, vertical = 10.dp),
+    verticalArrangement = Arrangement.spacedBy(8.dp),
   ) {
     // HUD Header
     Row(
@@ -314,6 +317,9 @@ fun VaultScreen(
         )
       }
       if (state.isUnlocked) {
+        IconButton(onClick = { showCloudSyncPanel = true; if (isDriveAuthorized) onRefreshDriveBackups() }) {
+          Icon(NexoIcons.Cloud, contentDescription = "Cloud Sync", tint = MaterialTheme.colorScheme.primary)
+        }
         Surface(
           shape = RoundedCornerShape(4.dp),
           color = NexoTheme.semantic.evaRed.copy(alpha = 0.16f),
@@ -548,102 +554,7 @@ fun VaultScreen(
         }
       }
     } else {
-      // UNLOCKED VAULT VIEW
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(
-          onClick = {
-            onExternalPickerStateChange(true)
-            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
-          },
-          modifier = Modifier
-            .weight(1f)
-            .height(48.dp)
-            .testTag("vault_add_media_btn"),
-          colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-          ),
-          shape = RoundedCornerShape(4.dp),
-        ) {
-          Icon(NexoIcons.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(strings.multimedia.uppercase(), fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        OutlinedButton(
-          onClick = {
-            onExternalPickerStateChange(true)
-            safPickerLauncher.launch(arrayOf("*/*"))
-          },
-          modifier = Modifier
-            .weight(1f)
-            .height(48.dp)
-            .testTag("vault_add_file_btn"),
-          border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary),
-          shape = RoundedCornerShape(4.dp),
-        ) {
-          Icon(NexoIcons.FileOpen, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(strings.addEncryptedFileBtn.uppercase(), color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-      }
-
-      // Google Drive Encrypted Backup (.nexo_vault) + Ephemeral Web/iPhone Portal QR
-      Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OutlinedButton(
-          onClick = {
-            showDriveBackupModal = true
-            if (isDriveAuthorized) onRefreshDriveBackups()
-          },
-          modifier = Modifier
-            .weight(1f)
-            .height(44.dp)
-            .testTag("vault_drive_backup_btn"),
-          border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)),
-          shape = RoundedCornerShape(4.dp),
-          contentPadding = PaddingValues(horizontal = 8.dp),
-        ) {
-          Icon(NexoIcons.CloudUpload, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = strings.vaultDriveBackupBtn.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
-        OutlinedButton(
-          onClick = { showPortalModal = true },
-          modifier = Modifier
-            .weight(1f)
-            .height(44.dp)
-            .testTag("vault_web_portal_btn"),
-          border = BorderStroke(
-            1.dp,
-            if (portalState.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-          ),
-          shape = RoundedCornerShape(4.dp),
-          contentPadding = PaddingValues(horizontal = 8.dp),
-        ) {
-          Icon(
-            NexoIcons.QrCode2,
-            contentDescription = null,
-            tint = if (portalState.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-            modifier = Modifier.size(16.dp),
-          )
-          Spacer(modifier = Modifier.width(6.dp))
-          Text(
-            text = strings.vaultWebPortalBtn.uppercase(),
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = if (portalState.isRunning) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-          )
-        }
-      }
-
+      // UNLOCKED VAULT VIEW (Acciones en FAB '+' flotante)
       if (state.isBusy) {
         Row(
           modifier = Modifier
@@ -863,11 +774,11 @@ fun VaultScreen(
       items(state.items.filter { NexoVaultExtraStore.activeFolder == null || NexoVaultExtraStore.itemFolderMap[it.id] == NexoVaultExtraStore.activeFolder }, key = { it.id }) { item ->
             val isOpeningThis = state.openingItemId == item.id
             val isChecked = item.id in selectedVaultIds
-            BichromaticCard(
+            Surface(
+              color = if (isChecked) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent,
               modifier = Modifier
                 .fillMaxWidth()
                 .testTag("vault_item_${item.id}"),
-              accentBorder = isOpeningThis || isChecked,
             ) {
               var itemRootTopLeft by remember(item.id) { mutableStateOf(Offset.Zero) }
               Row(
@@ -915,7 +826,7 @@ fun VaultScreen(
                       onOpenVaultItem(item)
                     }
                   }
-                  .padding(horizontal = 8.dp, vertical = 10.dp),
+                  .padding(horizontal = 4.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
               ) {
                 Checkbox(
@@ -965,18 +876,7 @@ fun VaultScreen(
                       maxLines = 1,
                     )
                   }
-                  Surface(
-                    shape = RoundedCornerShape(2.dp),
-                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.14f),
-                    border = BorderStroke(0.8.dp, MaterialTheme.colorScheme.secondary),
-                  ) {
-                    Text(
-                      text = strings.vaultInternalBadge.uppercase(),
-                      style = MonoTnumStyle,
-                      color = MaterialTheme.colorScheme.secondary,
-                      modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                    )
-                  }
+
                 }
                 val isInCloud = remember(state.driveBackups, item.id, item.originalName) {
                   state.driveBackups.any { b ->
@@ -1001,6 +901,39 @@ fun VaultScreen(
         }
       }
     }
+  }
+
+  if (state.isUnlocked) {
+    NexoVaultExpandableFab(
+      isEs = isEsVault,
+      onAddMedia = {
+        onExternalPickerStateChange(true)
+        photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageAndVideo))
+      },
+      onAddOtherFiles = {
+        onExternalPickerStateChange(true)
+        safPickerLauncher.launch(arrayOf("*/*"))
+      },
+      onNewFolder = { showNewVaultFolderDialog = true },
+      onOpenCloudSync = { showCloudSyncPanel = true; if (isDriveAuthorized) onRefreshDriveBackups() },
+      onOpenWebPortal = { showPortalModal = true }
+    )
+  }
+  } // Fin Box principal
+
+  if (showCloudSyncPanel) {
+    NexoVaultCloudSyncDialog(
+      state = state,
+      isDriveAuthorized = isDriveAuthorized,
+      isEs = isEsVault,
+      onConnectDrive = onConnectDrive,
+      onRefresh = onRefreshDriveBackups,
+      onUploadPending = { onRunSmartBackup() },
+      onDownloadPending = { list -> onRestoreSelectedDriveBackups(list, "") },
+      onOpenProgress = onReopenBackupProgress,
+      onOpenAdvancedModal = { showDriveBackupModal = true },
+      onDismiss = { showCloudSyncPanel = false }
+    )
   }
 
   pendingCloudActionItem?.let { (target, inCloud) ->

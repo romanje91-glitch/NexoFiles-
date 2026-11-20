@@ -1,5 +1,10 @@
 package com.example.ui.viewmodel
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.atomic.AtomicInteger
 import com.example.MainActivity
 import com.example.NexoNotificationPrefs
 import com.example.NexoMultiGoogleStore
@@ -1548,39 +1553,52 @@ class ToolsAndNetworkViewModel(
             backupProgress = 0.08f,
           )
 
-          var uploaded = 0
-          for ((idx, item) in pendingUpload.withIndex()) {
-            ensureActive()
-            while (vaultBackupPaused) {
-              ensureActive()
-              delay(300)
-            }
-            val curPct = (((idx.toFloat() / totalToUpload.toFloat()) * 0.92f + 0.05f) * 100f).toInt().coerceIn(5, 98)
-            updateVaultBackupNotification("Respaldo Bóveda ($curPct%)", "Subiendo ${item.originalName} (${idx + 1}/$totalToUpload)", curPct, true)
-            _vaultState.value = _vaultState.value.copy(
-              backupCurrentFileName = item.originalName,
-              backupDoneCount = idx,
-              backupProgress = ((idx.toFloat() / totalToUpload.toFloat()) * 0.92f + 0.05f).coerceIn(0.05f, 0.98f),
-            )
-            val folderName = NexoVaultExtraStore.itemFolderMap[item.id].orEmpty()
-            val targetFolderId = container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
-            val singleDir = File(stageDir, item.id).apply { mkdirs() }
-            val exported = container.vault.exportSelectedVaultToNxv(listOf(item), passphrase, singleDir).getOrThrow()
-            for (nxv in exported) {
-              val res = container.googleDrive.uploadFile(token, nxv, targetFolderId)
-              if (res.isSuccess) uploaded++
-            }
-            val doneNow = idx + 1
-            val elapsedMs = (System.currentTimeMillis() - startMs).coerceAtLeast(300L)
-            val avgPerItemMs = elapsedMs / doneNow
-            val remSec = (((totalToUpload - doneNow) * avgPerItemMs) / 1000L).toInt().coerceAtLeast(0)
-            _vaultState.value = _vaultState.value.copy(
-              backupDoneCount = doneNow,
-              backupProgress = (doneNow.toFloat() / totalToUpload.toFloat()).coerceIn(0f, 1f),
-              backupEtaSeconds = remSec,
-            )
+          val uploadedCount = AtomicInteger(0)
+          val doneCount = AtomicInteger(0)
+          val folderIdCache = mutableMapOf<String, String>()
+          // Pre-resolver carpetas únicas UNA sola vez (evita N llamadas repetidas a Drive)
+          pendingUpload.map { NexoVaultExtraStore.itemFolderMap[it.id].orEmpty() }.distinct().forEach { fn ->
+            folderIdCache[fn] = container.googleDrive.ensureVaultSubfolder(token, fn).getOrThrow()
           }
-          Triple(uploaded, skippedAlreadySynced, totalToUpload)
+          val sem = Semaphore(3)
+          kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            pendingUpload.map { item ->
+              async {
+                sem.withPermit {
+                  ensureActive()
+                  while (vaultBackupPaused) {
+                    ensureActive()
+                    delay(300)
+                  }
+                  val folderName = NexoVaultExtraStore.itemFolderMap[item.id].orEmpty()
+                  val targetFolderId = folderIdCache[folderName] ?: container.googleDrive.ensureVaultSubfolder(token, folderName).getOrThrow()
+                  val singleDir = File(stageDir, item.id).apply { mkdirs() }
+                  try {
+                    val exported = container.vault.exportSelectedVaultToNxv(listOf(item), passphrase, singleDir).getOrThrow()
+                    for (nxv in exported) {
+                      val res = container.googleDrive.uploadFile(token, nxv, targetFolderId)
+                      if (res.isSuccess) uploadedCount.incrementAndGet()
+                    }
+                  } finally {
+                    singleDir.deleteRecursively()
+                  }
+                  val doneNow = doneCount.incrementAndGet()
+                  val pctFloat = (doneNow.toFloat() / totalToUpload.toFloat()).coerceIn(0.05f, 1f)
+                  val curPct = (pctFloat * 100f).toInt().coerceIn(5, 99)
+                  val elapsedMs = (System.currentTimeMillis() - startMs).coerceAtLeast(300L)
+                  val remSec = (((totalToUpload - doneNow) * (elapsedMs / doneNow)) / 1000L).toInt().coerceAtLeast(0)
+                  updateVaultBackupNotification("Respaldo Bóveda ($curPct%)", "Subiendo ${item.originalName} ($doneNow/$totalToUpload)", curPct, true)
+                  _vaultState.value = _vaultState.value.copy(
+                    backupCurrentFileName = item.originalName,
+                    backupDoneCount = doneNow,
+                    backupProgress = pctFloat,
+                    backupEtaSeconds = remSec,
+                  )
+                }
+              }
+            }.awaitAll()
+          }
+          Triple(uploadedCount.get(), skippedAlreadySynced, totalToUpload)
         }
       }.onSuccess { (uploaded, skipped, _) ->
         stageDir.deleteRecursively()
