@@ -321,7 +321,7 @@ fun GoogleDriveScreen(
             )
             Text(
               text = if (activeCloudTab == 0) {
-                driveState.accountEmail ?: "GOOGLE DRIVE API V3 · AUTO-BACKUP"
+                driveState.accountEmail ?: "GOOGLE DRIVE · RESPALDO"
               } else {
                 photosState.accountEmail ?: strings.googlePhotosSubtitle
               },
@@ -438,7 +438,7 @@ fun GoogleDriveScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                       Text(strings.driveNotConnectedHeadline.uppercase(), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                      Text("Credential Manager + AuthorizationClient (Drive API v3).", style = MonoTnumStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                      Text("Conecta tu cuenta de Google para gestionar tus archivos en la nube.", style = MonoTnumStyle, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                   }
                   Spacer(modifier = Modifier.height(12.dp))

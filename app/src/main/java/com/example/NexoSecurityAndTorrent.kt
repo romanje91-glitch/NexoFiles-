@@ -373,8 +373,8 @@ fun NexoMasterPinChangeDialog(
                     value = confirmPin,
                     onValueChange = { confirmPin = it.filter { c -> c.isDigit() }.take(12) },
                     label = { Text("Confirmar nuevo Master PIN") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )

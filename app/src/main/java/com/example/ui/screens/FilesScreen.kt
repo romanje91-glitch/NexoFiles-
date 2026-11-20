@@ -338,7 +338,7 @@ NexoExplorerTabBar(currentPath = uiState.currentPath, onNavigatePath = onNavigat
 Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
       ) {
         Box(modifier = Modifier.weight(1f)) {
           BreadcrumbBar(
@@ -401,7 +401,7 @@ if (uiState.availableVolumes.size > 1) {
           modifier = Modifier
             .fillMaxWidth()
             .horizontalScroll(rememberScrollState()),
-          horizontalArrangement = Arrangement.spacedBy(2.dp),
+          horizontalArrangement = Arrangement.spacedBy(0.dp),
         ) {
           uiState.availableVolumes.forEach { (label, volPath) ->
             val active = uiState.currentPath.startsWith(volPath)
@@ -505,7 +505,7 @@ Row(
           .fillMaxWidth()
           .horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(0.dp),
       ) {
         SortBy.entries.forEach { option ->
           val selected = uiState.sortBy == option
@@ -610,7 +610,7 @@ Row(
               fontWeight = FontWeight.Bold,
               color = MaterialTheme.colorScheme.primary,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
               TextButton(onClick = onSelectAll, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
                 Text(strings.selectAllCd.uppercase(), fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
               }
@@ -687,7 +687,7 @@ Row(
             items(rows, key = { it.first().path }) { rowItems ->
               Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(0.dp),
               ) {
                 rowItems.forEach { item ->
                   val isSelected = item.path in uiState.selectedPaths
@@ -1257,7 +1257,7 @@ private fun ActionIconButton(
     modifier = Modifier
       .clip(RoundedCornerShape(6.dp))
       .clickable(onClick = onClick)
-      .padding(horizontal = 8.dp, vertical = 4.dp),
+      .padding(horizontal = 10.dp, vertical = 2.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     Icon(

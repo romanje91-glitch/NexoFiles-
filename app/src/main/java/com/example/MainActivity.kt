@@ -1,5 +1,8 @@
 package com.example
 
+import android.view.WindowManager
+import com.example.NexoMasterDirs
+import com.example.NexoVaultFlipGuard
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.OutlinedButton
@@ -220,6 +223,7 @@ class MainActivity : FragmentActivity() {
     CrashLogger.install(applicationContext)
     super.onCreate(savedInstanceState)
     NexoCrashLibrary.install(applicationContext)
+    NexoMasterDirs.ensureAll()
     enableEdgeToEdge(
       statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
       navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
@@ -372,6 +376,25 @@ private fun NexoFilesRoot(
   var chooserTargetGallery by remember { mutableStateOf<List<String>>(emptyList()) }
   var showFullAudioPlayer by remember { mutableStateOf(false) }
   var showShareAppDialog by remember { mutableStateOf(false) }
+  DisposableEffect(currentRoute) {
+    val act = context as? android.app.Activity
+    if (currentRoute == NexoRoutes.VAULT) {
+      act?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    } else {
+      act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+    }
+    val unregisterFlip = if (currentRoute == NexoRoutes.VAULT && NexoVaultFlipGuard.isEnabled(context)) {
+      NexoVaultFlipGuard.registerListener(context) {
+        toolsVm.lockVault()
+      }
+    } else { {} }
+    onDispose {
+      unregisterFlip()
+      if (currentRoute != NexoRoutes.VAULT) {
+        act?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+      }
+    }
+  }
   val notifPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
   LaunchedEffect(Unit) {
     if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {

@@ -1314,7 +1314,7 @@ object EsStrings : AppStrings {
   override val bytesStat: (String, String) -> String = { bytes, status -> "$bytes · $status" }
 
   override val vaultScreenTitle = "Bóveda Privada"
-  override val vaultScreenSubtitle = "Cifrado AES-256-GCM · Visor interno hermético"
+  override val vaultScreenSubtitle = "Almacenamiento privado protegido"
   override val lockBtn = "Bloquear"
   override val vaultLockedHeadline = "BÓVEDA SELLADA"
   override val vaultLockedDesc = "Autentícate mediante el método activo configurado en Ajustes para acceder a la bóveda."
@@ -1325,7 +1325,7 @@ object EsStrings : AppStrings {
 
   override val vaultDriveBackupBtn = "Drive .nexo_vault"
   override val vaultWebPortalBtn = "Portal Web / QR"
-  override val vaultInternalBadge = "MODO HERMÉTICO · VISOR INTERNO DIRECTO"
+  override val vaultInternalBadge = "PROTEGIDO"
   override val vaultSecurityManagedInSettingsNote = "El cambio de método de bloqueo (Huella/PIN/Patrón/Clave) se gestiona exclusivamente en Ajustes."
   override val vaultDriveModalTitle = "Respaldo Cifrado Google Drive"
   override val vaultDriveModalDesc = "Cifra tus archivos en formato .nexo_vault (AES-256-GCM + PBKDF2) dentro de la carpeta NexoVault_Encrypted de tu Google Drive."
@@ -1336,7 +1336,7 @@ object EsStrings : AppStrings {
   override val vaultNoDriveBackups = "No hay archivos .nexo_vault respaldados en Google Drive."
   override val vaultRestoreFromDriveBtn = "Descifrar a Bóveda"
   override val vaultPortalModalTitle = "Acceso Remoto Efímero Web / iPhone"
-  override val vaultPortalModalDesc = "Genera un token aleatorio y un código QR temporal para ver y descifrar archivos en Safari (iPhone) o navegador sin subir la clave al servidor."
+  override val vaultPortalModalDesc = "Genera un token aleatorio y un código QR temporal para acceder a tus archivos desde un navegador en tu red local."
   override val vaultStartPortalBtn = "Generar Token + QR"
   override val vaultStopPortalBtn = "Revocar sesión y cerrar portal"
   override val vaultPortalCopyLinkBtn = "Copiar enlace"
@@ -1963,7 +1963,7 @@ object EnStrings : AppStrings {
   override val bytesStat: (String, String) -> String = { bytes, status -> "$bytes · $status" }
 
   override val vaultScreenTitle = "Private Vault"
-  override val vaultScreenSubtitle = "AES-256-GCM encryption · Hermetic internal viewers"
+  override val vaultScreenSubtitle = "Almacenamiento privado protegidos"
   override val lockBtn = "Lock"
   override val vaultLockedHeadline = "VAULT SEALED"
   override val vaultLockedDesc = "Autenticación requerida"
@@ -1974,7 +1974,7 @@ object EnStrings : AppStrings {
 
   override val vaultDriveBackupBtn = "Drive .nexo_vault"
   override val vaultWebPortalBtn = "Web / QR Portal"
-  override val vaultInternalBadge = "HERMETIC MODE · DIRECT INTERNAL VIEWER"
+  override val vaultInternalBadge = "PROTECTED"
   override val vaultSecurityManagedInSettingsNote = ""
   override val vaultDriveModalTitle = "Google Drive Encrypted Backup"
   override val vaultDriveModalDesc = "Encrypts your files as .nexo_vault (AES-256-GCM + PBKDF2) inside the NexoVault_Encrypted Drive folder."
